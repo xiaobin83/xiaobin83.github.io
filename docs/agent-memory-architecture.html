@@ -523,6 +523,24 @@ fields:
     merge_op: patch          <span class="dim"># 使用 SEARCH/REPLACE 局部修改</span></pre>
 
   <p>这种声明式设计意味着：<strong>新增记忆类型只需写一个 YAML 文件，零代码改动。</strong></p>
+
+  <div class="card">
+    <h4>系统如何识别记忆类型？</h4>
+    <p><code>memory_type</code> 是一个"自顶向下的多对多映射"——一个 YAML 文件定义一种类型，它同时决定了 LLM 输出中的字段名、Pydantic 验证模型、以及文件系统上的存储路径：</p>
+    <pre style="margin:8px 0;font-size:12px;background:transparent;border:none;padding:0"><span class="dim"># ① YAML 定义 → Registry 注册</span>
+experiences.yaml → <span class="hl">MemoryTypeRegistry._types["experiences"]</span>
+
+<span class="dim"># ② Registry → SchemaModelGenerator → Pydantic 模型字段</span>
+<span class="hl">field_definitions["experiences"] = List[ExperiencesData]</span>
+
+<span class="dim"># ③ LLM 按字段名输出 → resolve_operations 按 schema 分派</span>
+<span class="hl">getattr(operations, "experiences", None)</span>  →  <span class="dim">取出 LLM 输出的 experiences 数据</span>
+
+<span class="dim"># ④ schema.directory + schema.filename_template → URI 存储</span>
+<span class="hl">generate_uri(schema, fields)</span>
+<span class="dim">   → "viking://agent/{{ agent_space }}/memories/experiences/{{ experience_name }}.md"</span></pre>
+    <p>代码链路：<a href="file:///Users/wangtingting/Workspace/OpenViking/OpenViking/openviking/session/memory/memory_type_registry.py" style="color:inherit;text-decoration:underline;">MemoryTypeRegistry</a> 从 YAML 加载 schema → <a href="file:///Users/wangtingting/Workspace/OpenViking/OpenViking/openviking/session/memory/schema_model_generator.py" style="color:inherit;text-decoration:underline;">SchemaModelGenerator.create_structured_operations_model()</a> 将每个 <code>memory_type</code> 生成为独立的 Pydantic 字段 → <a href="file:///Users/wangtingting/Workspace/OpenViking/OpenViking/openviking/session/memory/extract_loop.py" style="color:inherit;text-decoration:underline;">ExtractLoop.resolve_operations()</a> 按 <code>getattr(operations, memory_type)</code> 分派 → <a href="file:///Users/wangtingting/Workspace/OpenViking/OpenViking/openviking/session/memory/utils/uri.py" style="color:inherit;text-decoration:underline;">generate_uri()</a> 渲染 <code>directory + filename_template</code> 写入对应路径。整个过程不需要任何硬编码的类型判断——新增类型只需加一个 YAML。</p>
+  </div>
 </section>
 
 <!-- ═══════════════════ S3 ═══════════════════ -->
@@ -659,6 +677,18 @@ fields:
   </div>
 
   <p>LLM 可以在循环中使用 <code>read</code> 和 <code>search</code> 工具进一步探索已有记忆，也可以在信息足够时直接输出操作 JSON。处理完毕后通过 <code>resolve_operations()</code> 将 <code>page_id</code> 解析为真实 URI，通过 <code>finalize_operations()</code> 将 WikiLink 解析为 StoredLink。</p>
+
+  <div class="card">
+    <h4>LLM 处理的数据源头是什么？</h4>
+    <p>LLM 看到的 prompt 包含 <strong>三部分数据</strong>：</p>
+    <p style="margin-top:8px;"><strong>① Conversation History（来自 session 归档消息）</strong><br>
+    在 <code>commit_async()</code> Phase 2 中，<code>_run_memory_extraction(messages_to_archive)</code> 将已归档的 session 消息传给 <code>SessionExtractContextProvider</code>，<code>_build_conversation_message()</code> 将其格式化为 LLM 看到的对话文本。</p>
+    <p style="margin-top:8px;"><strong>② 已有记忆文件（来自 VikingFS 存储）</strong><br>
+    <code>prefetch()</code> 阶段对所有记忆目录执行语义搜索，读取相关已存在的 <code>profile.md</code>、<code>events/</code>、<code>skills/</code> 等记忆文件，注入到上下文。这是"旧知识"的来源。</p>
+    <p style="margin-top:8px;"><strong>③ System Prompt（含 JSON Schema）</strong><br>
+    告诉 LLM 它能理解哪些字段、每个字段的含义、以及输出格式。</p>
+    <p style="margin-top:8px;font-size:14px;color:var(--text-muted);font-style:italic">session 提供"新信息"，已有记忆提供"旧知识"，LLM 基于两者做合并/更新/新建的决策。</p>
+  </div>
 </section>
 
 <!-- ═══════════════════ S6 ═══════════════════ -->
