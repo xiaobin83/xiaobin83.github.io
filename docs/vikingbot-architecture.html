@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vikingbot 架构深度解析</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card-bg: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --accent4: #f0883e;
+    --accent5: #ff7b72;
+    --accent6: #79c0ff;
+    --heading: #f0f6fc;
+    --code-bg: #1c2128;
+    --code-text: #c9d1d9;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    padding: 80px 24px 60px;
+    text-align: center;
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #0d1117 100%);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 50%, rgba(88,166,255,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 50%, rgba(210,168,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .hero .logo { font-size: 72px; display: block; margin-bottom: 8px; position: relative; }
+  .hero h1 { font-size: 42px; font-weight: 700; color: var(--heading); position: relative; }
+  .hero .subtitle {
+    font-size: 18px;
+    color: var(--text-dim);
+    margin-top: 12px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    position: relative;
+  }
+  .hero .badge-group { margin-top: 24px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; position: relative; }
+  .badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    background: rgba(88,166,255,0.12);
+    border: 1px solid rgba(88,166,255,0.25);
+    color: var(--accent);
+  }
+
+  /* Layout */
+  .container { max-width: 1000px; margin: 0 auto; padding: 48px 24px; }
+
+  /* TOC */
+  .toc {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 { font-size: 16px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+  .toc ol {
+    list-style: none;
+    counter-reset: toc;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 32px;
+  }
+  @media (max-width: 640px) { .toc ol { grid-template-columns: 1fr; } }
+  .toc li { counter-increment: toc; }
+  .toc li a {
+    display: block;
+    padding: 6px 0 6px 32px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+    position: relative;
+    transition: color .2s;
+  }
+  .toc li a::before {
+    content: counter(toc);
+    position: absolute;
+    left: 0;
+    top: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(88,166,255,0.12);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .toc li a:hover { color: var(--accent); }
+
+  /* Sections */
+  section { margin-bottom: 56px; }
+  .section-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--heading);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title .num {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(88,166,255,0.1);
+    border: 1px solid rgba(88,166,255,0.2);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 15px;
+    margin-bottom: 24px;
+    padding-left: 44px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+  .card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--heading);
+    margin-bottom: 12px;
+  }
+  .card p, .card li { font-size: 15px; color: var(--text); line-height: 1.8; }
+  .card ul, .card ol { padding-left: 20px; margin: 8px 0; }
+  .card li { margin-bottom: 4px; }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .grid-3 { grid-template-columns: 1fr; } }
+
+  .stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+  }
+  .stat-card .icon { font-size: 28px; margin-bottom: 8px; }
+  .stat-card .num { font-size: 32px; font-weight: 700; color: var(--heading); }
+  .stat-card .label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  /* Architecture Diagram */
+  .arch-diagram {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px 24px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  .layers {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .layer {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 24px;
+    position: relative;
+    transition: border-color .3s;
+  }
+  .layer:hover { border-color: var(--accent); }
+  .layer.channels { background: linear-gradient(135deg, rgba(88,166,255,0.08), rgba(88,166,255,0.02)); }
+  .layer.bus { background: rgba(139,148,158,0.06); border-style: dashed; }
+  .layer.agent { background: linear-gradient(135deg, rgba(63,185,80,0.08), rgba(63,185,80,0.02)); }
+  .layer .layer-name {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 4px;
+  }
+  .layer.channels .layer-name { color: var(--accent); }
+  .layer.bus .layer-name { color: var(--text-dim); font-size: 12px; }
+  .layer.agent .layer-name { color: var(--accent2); }
+  .layer .layer-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .layer .layer-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .layer .layer-items span {
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .arrow-down {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+    padding: 4px 0;
+    opacity: 0.5;
+  }
+
+  /* Flow Diagram */
+  .flow {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    margin-bottom: 16px;
+    font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    color: var(--code-text);
+  }
+  .flow .comment { color: var(--text-dim); font-style: italic; }
+  .flow .keyword { color: var(--accent); }
+  .flow .string { color: var(--accent2); }
+  .flow .highlight { color: var(--accent4); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  thead { background: rgba(255,255,255,0.03); }
+  th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(48,54,61,0.4);
+  }
+  tr:last-child td { border-bottom: none; }
+
+  /* Code */
+  code {
+    font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    color: var(--accent6);
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  pre code {
+    display: block;
+    padding: 16px 20px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+
+  /* Highlight blocks */
+  .highlight-block {
+    border-left: 3px solid var(--accent);
+    padding: 16px 20px;
+    margin: 16px 0;
+    background: rgba(88,166,255,0.05);
+    border-radius: 0 8px 8px 0;
+  }
+  .highlight-block.warn { border-left-color: var(--accent4); background: rgba(240,136,62,0.05); }
+  .highlight-block.success { border-left-color: var(--accent2); background: rgba(63,185,80,0.05); }
+  .highlight-block.purple { border-left-color: var(--accent3); background: rgba(210,168,255,0.05); }
+  .highlight-block p { margin-bottom: 4px; }
+  .highlight-block p:last-child { margin-bottom: 0; }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .tag-blue { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .tag-green { background: rgba(63,185,80,0.15); color: var(--accent2); }
+  .tag-purple { background: rgba(210,168,255,0.15); color: var(--accent3); }
+  .tag-orange { background: rgba(240,136,62,0.15); color: var(--accent4); }
+  .tag-red { background: rgba(255,123,114,0.15); color: var(--accent5); }
+
+  /* Inline info box */
+  .info-box {
+    display: flex;
+    gap: 14px;
+    padding: 16px 20px;
+    background: rgba(88,166,255,0.06);
+    border: 1px solid rgba(88,166,255,0.15);
+    border-radius: 10px;
+    margin: 12px 0;
+  }
+  .info-box .icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+  .info-box p { font-size: 14px; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 48px 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  /* Accordion (for sub-sections) */
+  details {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  details summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--heading);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after {
+    content: '+';
+    font-size: 18px;
+    color: var(--text-dim);
+    transition: transform .2s;
+  }
+  details[open] summary::after { content: '−'; }
+  details .details-body { padding: 0 20px 16px; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 28px; }
+    .hero .logo { font-size: 48px; }
+    .section-title { font-size: 22px; }
+    .card { padding: 20px; }
+    .container { padding: 28px 16px; }
+    pre code { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <span class="logo">🐈</span>
+  <h1>Vikingbot 架构深度解析</h1>
+  <p class="subtitle">基于 OpenViking 的 OpenClaw-like AI Agent 框架 — 从外到内的完整理解</p>
+  <div class="badge-group">
+    <span class="badge">⚡ ReAct Agent Loop</span>
+    <span class="badge">🔌 11+ Channel 接入</span>
+    <span class="badge">🧠 OpenViking 记忆</span>
+    <span class="badge">🔧 MCP 工具协议</span>
+    <span class="badge">📦 沙箱隔离</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ============ TOC ============ -->
+  <nav class="toc">
+    <h2>📑 目录</h2>
+    <ol>
+      <li><a href="#layer1">用户视角 — 它是什么？</a></li>
+      <li><a href="#layer2">两种运行模式</a></li>
+      <li><a href="#layer3">三层管道架构</a></li>
+      <li><a href="#layer4">Agent Loop — 核心思考循环</a></li>
+      <li><a href="#layer5">Context Builder — 上下文构建</a></li>
+      <li><a href="#layer6">Tool Registry — 工具系统</a></li>
+      <li><a href="#layer7">LLM Provider — 模型提供者</a></li>
+      <li><a href="#layer8">Session Manager — 会话管理</a></li>
+      <li><a href="#layer9">Subagent — 子 Agent</a></li>
+      <li><a href="#layer10">Cron &amp; Heartbeat</a></li>
+      <li><a href="#layer11">完整数据流</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============ LAYER 1 ============ -->
+  <section id="layer1">
+    <h2 class="section-title"><span class="num">1</span> 用户视角 — Vikingbot 是什么？</h2>
+    <p class="section-desc">最简单直接的理解</p>
+
+    <div class="card">
+      <p><strong>Vikingbot 是一个"能在任何聊天平台里回复你的 AI 助手"。</strong></p>
+      <p>你可以在 Telegram、飞书、Discord、Slack、钉钉、QQ、WhatsApp、邮件等 10+ 个平台上和它对话。它不仅仅是聊天——它能读文件、写代码、搜网页、执行命令、生成图片、定时提醒你，还能自动学习并记住你的偏好。</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="stat-card">
+        <div class="icon">🔌</div>
+        <div class="num">11+</div>
+        <div class="label">支持的聊天平台</div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">🔧</div>
+        <div class="num">20+</div>
+        <div class="label">内置工具</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🤖 灵魂文件</h3>
+      <p>Agent 的"人格"由四个文件定义，位于 <code>workspace/</code> 目录：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>文件</th>
+            <th>作用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>SOUL.md</code></td>
+            <td>定义 Agent 的性格、价值观和沟通风格</td>
+          </tr>
+          <tr>
+            <td><code>TOOLS.md</code></td>
+            <td>告诉 LLM 有哪些工具可用以及如何用</td>
+          </tr>
+          <tr>
+            <td><code>USER.md</code></td>
+            <td>用户偏好配置（语言、专业程度等）</td>
+          </tr>
+          <tr>
+            <td><code>HEARTBEAT.md</code></td>
+            <td>定时任务清单</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 2 ============ -->
+  <section id="layer2">
+    <h2 class="section-title"><span class="num">2</span> 两种运行模式</h2>
+    <p class="section-desc">Gateway 模式 vs CLI 模式 — 同一套核心，不同的外壳</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>🌐 Gateway 模式 <span class="tag tag-blue">长期运行</span></h3>
+        <pre><code>ov gateway</code></pre>
+        <p>长期运行的服务，启动 5 个并发任务：</p>
+        <ul>
+          <li><strong>Cron</strong> — 定时任务</li>
+          <li><strong>Heartbeat</strong> — 心跳检测</li>
+          <li><strong>Channels</strong> — 所有聊天平台</li>
+          <li><strong>Agent Loop</strong> — 核心引擎</li>
+          <li><strong>FastAPI Server</strong> — HTTP API</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>💬 CLI 模式 <span class="tag tag-green">交互式</span></h3>
+        <pre><code>ov chat -m "hello"   # 单次
+ov chat               # 交互式</code></pre>
+        <p>核心流程与 Gateway 相同，只是用 <code>ChatChannel</code> 或 <code>SingleTurnChannel</code> 替代了外部平台。</p>
+      </div>
+    </div>
+
+    <div class="highlight-block">
+      <p>💡 <strong>关键点</strong>：两种模式下，Agent Loop、Provider、Tool Registry、Session Manager 等核心组件完全复用。唯一的区别是 Channel 的不同。</p>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 3 ============ -->
+  <section id="layer3">
+    <h2 class="section-title"><span class="num">3</span> 三层管道架构</h2>
+    <p class="section-desc">理解整个框架最重要的架构图</p>
+
+    <div class="arch-diagram">
+      <div class="layers">
+        <!-- Channels Layer -->
+        <div class="layer channels">
+          <div class="layer-name">📡 Channels Layer</div>
+          <div class="layer-desc">接收用户消息，发送回复</div>
+          <div class="layer-items">
+            <span>Telegram</span>
+            <span>Feishu</span>
+            <span>Discord</span>
+            <span>Slack</span>
+            <span>QQ</span>
+            <span>DingTalk</span>
+            <span>WhatsApp</span>
+            <span>Email</span>
+            <span>Mochat</span>
+            <span>OpenAPI</span>
+            <span>CLI</span>
+          </div>
+        </div>
+
+        <div class="arrow-down">⬇ InboundMessage</div>
+
+        <!-- Bus Layer -->
+        <div class="layer bus">
+          <div class="layer-name">🔗 MessageBus</div>
+          <div class="layer-desc">异步解耦层 — 两个 asyncio.Queue</div>
+          <div class="layer-items">
+            <span>inbound queue</span>
+            <span>outbound queue</span>
+          </div>
+        </div>
+
+        <div class="arrow-down">⬇ consume_inbound()</div>
+
+        <!-- Agent Loop Layer -->
+        <div class="layer agent">
+          <div class="layer-name">🧠 Agent Loop Layer</div>
+          <div class="layer-desc">ContextBuilder → LLM Provider → Tool Execution → 循环</div>
+          <div class="layer-items">
+            <span>ContextBuilder</span>
+            <span>ReAct Loop</span>
+            <span>ToolRegistry</span>
+            <span>Subagent</span>
+            <span>Session</span>
+          </div>
+        </div>
+
+        <div class="arrow-down">⬇ OutboundMessage</div>
+
+        <!-- Bus Layer again -->
+        <div class="layer bus">
+          <div class="layer-name">🔗 MessageBus</div>
+          <div class="layer-desc">出站消息分发</div>
+        </div>
+
+        <div class="arrow-down">⬇ dispatch 到对应 Channel</div>
+
+        <!-- Channels send -->
+        <div class="layer channels">
+          <div class="layer-name">📡 Channel.send()</div>
+          <div class="layer-desc">回复回到用户</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>📬 MessageBus — 解耦核心</h3>
+        <p>两个独立的 <code>asyncio.Queue</code>：</p>
+        <ul>
+          <li><strong>inbound</strong>：Channel → Agent Loop 的消息</li>
+          <li><strong>outbound</strong>：Agent Loop → Channel 的回复</li>
+        </ul>
+        <p>Channels 和 Agent Loop <strong>完全解耦</strong>，互不感知，只通过总线通信。</p>
+      </div>
+      <div class="card">
+        <h3>📡 Channel 的职责</h3>
+        <ol>
+          <li><strong>连接</strong>聊天平台（WebSocket / Polling / Webhook）</li>
+          <li><strong>接收</strong>用户消息 → 转换为 <code>InboundMessage</code></li>
+          <li><strong>发布</strong>到 <code>MessageBus.inbound</code></li>
+          <li><strong>接收</strong> <code>OutboundMessage</code> 并发送回平台</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 4 ============ -->
+  <section id="layer4">
+    <h2 class="section-title"><span class="num">4</span> Agent Loop — 核心思考循环</h2>
+    <p class="section-desc">OpenClaw-like Agent 的本质 — ReAct (Reasoning + Acting) 循环</p>
+
+    <div class="flow"><span class="keyword">收到 InboundMessage</span>
+         │
+         ├─ 特殊命令处理 (/new, /compact, /remember, /help)
+         │
+         ├─ 检查是否需要压缩记忆 (session > memory_window)
+         │
+         ├─ <span class="keyword">构建 Context</span> (ContextBuilder.build_messages)
+         │      ├── System Prompt (SOUL + TOOLS + 技能)
+         │      ├── 用户记忆 (OpenViking 语义检索)
+         │      ├── 用户画像 (USER.md)
+         │      └── 对话历史 (最近 N 轮)
+         │
+         ├─ <span class="highlight">进入核心循环 _run_agent_loop()</span>
+         │
+         └─ 保存 Session → 发布 OutboundMessage
+    </div>
+
+    <div class="card">
+      <h3>🔄 ReAct 循环实现</h3>
+      <pre><code><span class="keyword">while</span> iteration &lt; max_iterations:
+    iteration += 1
+
+    <span class="comment"># Step 1: 调用 LLM（带上工具定义）</span>
+    response = <span class="keyword">await</span> provider.chat(
+        messages=messages,
+        tools=tools.get_definitions(),
+    )
+
+    <span class="keyword">if</span> response.has_tool_calls:
+        <span class="comment"># Step 2-4: 执行工具，将结果放回消息列表</span>
+        results = <span class="keyword">await</span> asyncio.gather(*[
+            execute_single_tool(tc) <span class="keyword">for</span> tc <span class="keyword">in</span> response.tool_calls
+        ])
+        messages = context.add_tool_result(messages, ...)
+        messages.append({<span class="string">"role"</span>: <span class="string">"user"</span>,
+            <span class="string">"content"</span>: <span class="string">"Reflect on the results..."</span>})
+    <span class="keyword">else</span>:
+        <span class="comment"># LLM 认为任务完成</span>
+        final_content = response.content
+        <span class="keyword">break</span>
+</code></pre>
+    </div>
+
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="icon">🔁</div>
+        <div class="num">50</div>
+        <div class="label">最大迭代次数 (默认)</div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">⚡</div>
+        <div class="num">并行</div>
+        <div class="label">工具执行 (asyncio.gather)</div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">🧠</div>
+        <div class="num">体验注入</div>
+        <div class="label">写操作前自动检索经验</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 5 ============ -->
+  <section id="layer5">
+    <h2 class="section-title"><span class="num">5</span> Context Builder — 上下文构建</h2>
+    <p class="section-desc">将零散信息组装为 LLM 能理解的 System Prompt 和 Messages</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>📋 System Prompt 的构成</h3>
+        <pre><code><span class="comment">┌──────────────────────────────┐</span>
+<span class="comment">│ # vikingbot 🐈</span>
+<span class="highlight">(核心身份 + 运行时信息)</span>
+<span class="comment">├──────────────────────────────┤</span>
+<span class="comment">│ ## SOUL.md</span>         ← 人格定义
+<span class="comment">│ ## TOOLS.md</span>        ← 工具说明
+<span class="comment">│ ## AGENTS.md</span>       ← 行为指引
+<span class="comment">│ ## IDENTITY.md</span>     ← 身份补充
+<span class="comment">├──────────────────────────────┤</span>
+<span class="comment">│ # Active Skills</span>    ← 始终加载的技能
+<span class="comment">├──────────────────────────────┤</span>
+<span class="comment">│ # Skills</span>            ← 可用技能（仅摘要）
+<span class="comment">├──────────────────────────────┤</span>
+<span class="comment">│ ## Current User Info</span> ← 用户画像
+<span class="comment">└──────────────────────────────┘</span>
+</code></pre>
+      </div>
+      <div class="card">
+        <h3>📝 User Message 的构成</h3>
+        <pre><code><span class="comment">┌──────────────────────────────┐</span>
+<span class="comment">│ ## Current Time</span>    ← 时区感知
+<span class="comment">│ ## Current Session</span> ← 频道/群聊信息
+<span class="comment">│ ## openviking_search</span>  ← 语义检索到的记忆
+<span class="comment">│ Reply in same language..</span>
+<span class="comment">├──────────────────────────────┤</span>
+<span class="string">│ 用户实际消息内容</span>
+<span class="comment">└──────────────────────────────┘</span>
+</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 6 ============ -->
+  <section id="layer6">
+    <h2 class="section-title"><span class="num">6</span> Tool Registry — 工具系统</h2>
+    <p class="section-desc">动态工具注册表 — 所有工具通过统一的 factory 注册</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>类别</th>
+            <th>工具</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag tag-blue">文件</span></td>
+            <td><code>read_file</code>, <code>write_file</code>, <code>edit_file</code>, <code>list_dir</code></td>
+            <td>基础文件读写</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-blue">Shell</span></td>
+            <td><code>exec</code></td>
+            <td>执行命令（有限制）</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-green">Web</span></td>
+            <td><code>web_search</code>, <code>web_fetch</code></td>
+            <td>搜索和抓取网页</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-purple">OpenViking</span></td>
+            <td><code>openviking_search</code>, <code>openviking_read</code>, <code>openviking_list</code>, <code>openviking_grep</code>, <code>openviking_glob</code>, <code>openviking_memory_commit</code>, <code>openviking_add_resource</code></td>
+            <td>知识库操作</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-orange">通信</span></td>
+            <td><code>message</code></td>
+            <td>向频道发送消息</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-orange">图片</span></td>
+            <td><code>generate_image</code></td>
+            <td>图片生成</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-orange">后台</span></td>
+            <td><code>spawn</code></td>
+            <td>启动子 Agent</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-green">定时</span></td>
+            <td><code>cron</code></td>
+            <td>定时提醒</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-red">MCP</span></td>
+            <td><code>mcp_&lt;server&gt;_&lt;tool&gt;</code></td>
+            <td>MCP 协议外部工具</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>工具执行流程</h3>
+      <p>每个工具执行时自动接入追踪和钩子：</p>
+      <pre><code><span class="keyword">async def</span> execute(name, params, session_key, ...):
+    <span class="comment"># 1. 查找工具</span>
+    tool = self._tools.get(name)
+
+    <span class="comment"># 2. Langfuse 追踪开始</span>
+    tool_span = langfuse.tool_call(name=name, input=params)
+
+    <span class="comment"># 3. 参数校验</span>
+    errors = tool.validate_params(params)
+
+    <span class="comment"># 4. 执行</span>
+    result = await tool.execute(tool_context, **params)
+
+    <span class="comment"># 5. 执行后 Hook</span>
+    hook_result = await hook_manager.execute_hooks(
+        context=HookContext(event_type="tool.post_call"),
+        tool_name=name, params=params, result=result,
+    )
+</code></pre>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 7 ============ -->
+  <section id="layer7">
+    <h2 class="section-title"><span class="num">7</span> LLM Provider — 模型提供者</h2>
+    <p class="section-desc">统一的 LLM 调用抽象层</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>📐 抽象接口</h3>
+        <pre><code><span class="keyword">class</span> LLMProvider:
+    <span class="keyword">async def</span> chat(
+        messages: list[dict],
+        tools: list[dict] | None,
+        model: str | None,
+    ) -> LLMResponse:
+        <span class="keyword">pass</span>
+
+<span class="comment"># LLMResponse 包含:</span>
+<span class="comment"># - content: 文本回复</span>
+<span class="comment"># - tool_calls: 工具调用请求列表</span>
+<span class="comment"># - reasoning_content: 思考过程 (Kimi/DeepSeek)</span></code></pre>
+      </div>
+      <div class="card">
+        <h3>🔌 支持的提供商</h3>
+        <p>使用 <strong>LiteLLM</strong> 统一对接 10+ 个模型提供商：</p>
+        <ul>
+          <li>OpenAI, Anthropic, DeepSeek</li>
+          <li>Gemini, MiniMax, Moonshot</li>
+          <li>Zhipu, Dashscope, Groq</li>
+          <li>OpenRouter, AiHubMix, vLLM</li>
+          <li>VolcEngine</li>
+        </ul>
+        <p>通过 <code>Provider Registry</code> 实现自动匹配，新增提供商只需 2 步。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 8 ============ -->
+  <section id="layer8">
+    <h2 class="section-title"><span class="num">8</span> Session Manager — 会话管理</h2>
+    <p class="section-desc">对话历史的持久化存储与管理</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>🔑 Session Key</h3>
+        <pre><code>SessionKey = type + channel_id + chat_id
+
+<span class="comment"># 示例</span>
+telegram__12345678__987654321
+feishu__cli_a1b2c3__oc_xxxxx</code></pre>
+      </div>
+      <div class="card">
+        <h3>💾 存储格式（JSONL）</h3>
+        <pre><code><span class="comment"># 第一行：元数据</span>
+{<span class="string">"_type"</span>: <span class="string">"metadata"</span>,
+ <span class="string">"session_key"</span>: <span class="string">"telegram__..."</span>,
+ <span class="string">"created_at"</span>: <span class="string">"..."</span>,
+ <span class="string">"metadata"</span>: { ... }}
+
+<span class="comment"># 后续行：消息</span>
+{<span class="string">"role"</span>: <span class="string">"user"</span>,
+ <span class="string">"content"</span>: <span class="string">"Hello"</span>, ...}
+{<span class="string">"role"</span>: <span class="string">"assistant"</span>,
+ <span class="string">"content"</span>: <span class="string">"Hi!"</span>, ...}</code></pre>
+      </div>
+    </div>
+
+    <div class="highlight-block success">
+      <p>⚡ 关键设计：<strong>记忆窗口 + 自动压缩</strong> — 会话超过 50 轮时，自动触发记忆压缩（调用 LLM 提取摘要），将旧消息归档到 OpenViking 中长期记忆。</p>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 9 ============ -->
+  <section id="layer9">
+    <h2 class="section-title"><span class="num">9</span> Subagent — 子 Agent</h2>
+    <p class="section-desc">后台任务执行的"Agent 层级协作"机制</p>
+
+    <div class="arch-diagram">
+      <div class="layers" style="max-width: 600px;">
+        <div class="layer agent" style="padding: 12px 20px;">
+          <div class="layer-name" style="font-size: 13px;">🧠 主 Agent</div>
+          <div class="layer-desc" style="font-size: 12px;">调用 spawn 工具 → 创建子 Agent</div>
+        </div>
+        <div class="arrow-down" style="font-size: 12px; padding: 2px 0;">⬇</div>
+        <div class="layer agent" style="padding: 12px 20px; background: linear-gradient(135deg, rgba(210,168,255,0.08), rgba(210,168,255,0.02));">
+          <div class="layer-name" style="font-size: 13px; color: var(--accent3);">⚙️ 子 Agent</div>
+          <div class="layer-desc" style="font-size: 12px;">独立运行（最多 15 轮）→ 结果通知主 Agent</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h3>🔄 独立循环</h3>
+        <p>子 Agent 拥有独立的 <code>ToolRegistry</code>，不包含 <code>message</code> 和 <code>spawn</code> 工具。</p>
+      </div>
+      <div class="card">
+        <h3>🎯 专注任务</h3>
+        <p>限制最多 15 轮迭代，专注于完成单一任务。</p>
+      </div>
+      <div class="card">
+        <h3>📬 结果通报</h3>
+        <p>完成后通过 MessageBus 将结果注入给主 Agent，由主 Agent 自然地呈现给用户。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 10 ============ -->
+  <section id="layer10">
+    <h2 class="section-title"><span class="num">10</span> Cron &amp; Heartbeat — 定时服务</h2>
+    <p class="section-desc">让 Agent 具备自主行动能力</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>⏰ Cron Service</h3>
+        <p>支持三种调度方式：</p>
+        <ul>
+          <li><strong>every</strong> — 固定间隔（如每 2 小时）</li>
+          <li><strong>cron</strong> — cron 表达式（如每天 9:00）</li>
+          <li><strong>at</strong> — 一次性定时（ISO 格式时间）</li>
+        </ul>
+        <p>Agent 通过 <code>cron</code> 工具自主创建和管理定时任务。</p>
+      </div>
+      <div class="card">
+        <h3>❤️ Heartbeat Service</h3>
+        <p>定期检查 <code>HEARTBEAT.md</code> 文件：</p>
+        <ul>
+          <li>读取待办任务清单</li>
+          <li>构造 prompt 触发 Agent 执行</li>
+          <li>结果可自动发送到指定频道</li>
+        </ul>
+        <p>两者都通过 <code>AgentLoop.process_direct()</code> 触发。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 11 ============ -->
+  <section id="layer11">
+    <h2 class="section-title"><span class="num">11</span> 完整数据流</h2>
+    <p class="section-desc">从用户消息到 AI 回复的完整链路</p>
+
+    <div class="flow">用户发消息 <span class="string">"帮我查一下今天上海天气"</span>
+         │
+         ▼
+  📡 <span class="keyword">Channel</span> (如 FeishuChannel)
+         │  1. 创建 InboundMessage
+         │  2. bus.publish_inbound(msg)
+         ▼
+  🔗 <span class="highlight">MessageBus.inbound</span> 队列
+         │
+         ▼
+  🧠 <span class="keyword">AgentLoop.run()</span> → _process_message(msg)
+         │
+         ├─ 1. 获取 / 创建 Session
+         ├─ 2. <span class="keyword">ContextBuilder.build_messages()</span>
+         │      ├─ 构建 System Prompt (SOUL + TOOLS + 技能 + 用户画像)
+         │      └─ 注入 OpenViking 记忆
+         ├─ 3. <span class="keyword">_run_agent_loop()</span>   ← ReAct 循环
+         │      ├─ LLM.chat() → <span class="string">"需要调用 web_search"</span>
+         │      ├─ ToolRegistry.execute(<span class="string">"web_search"</span>, {<span class="string">"query"</span>: <span class="string">"上海天气"</span>})
+         │      ├─ LLM.chat() → <span class="string">"上海今天晴，25°C"</span>
+         │      └─ 返回 final_content
+         ├─ 4. Session.add_message() → 保存对话
+         ├─ 5. bus.publish_outbound(OutboundMessage)
+         │
+         ▼
+  🔗 <span class="highlight">MessageBus.outbound</span> 队列
+         │
+         ▼
+  📡 <span class="keyword">ChannelManager._dispatch_outbound()</span>
+         │  找到对应 Channel
+         ▼
+  📡 <span class="keyword">Channel.send()</span>
+         │
+         ▼
+  用户收到回复 <span class="string">"上海今天晴，25°C ☀️"</span>
+    </div>
+
+    <div class="highlight-block purple">
+      <p>🎯 <strong>核心设计理念</strong>：通过 MessageBus 解耦 Channels 和 Agent Loop，通过 ReAct 循环让 LLM 自主决定何时调用工具，通过 Context Builder 将记忆、技能、用户画像统一注入到每一次对话中。</p>
+    </div>
+  </section>
+
+  <!-- ============ SOURCE ============ -->
+  <section>
+    <h2 class="section-title"><span class="num">📁</span> 源码结构</h2>
+    <p class="section-desc">Vikingbot 核心模块概览</p>
+
+    <div class="card">
+      <pre><code>vikingbot/
+├── __main__.py          # 入口: python -m vikingbot
+├── cli/commands.py      # CLI 命令 (gateway / chat / status / cron)
+│
+├── bus/
+│   ├── queue.py         # MessageBus (inbound + outbound asyncio.Queue)
+│   └── events.py        # InboundMessage / OutboundMessage
+│
+├── channels/
+│   ├── base.py          # BaseChannel 抽象基类
+│   ├── manager.py       # ChannelManager (生命周期 + 消息分发)
+│   ├── telegram.py      # Telegram 实现
+│   ├── feishu.py        # 飞书实现
+│   ├── discord.py       # Discord 实现
+│   ├── whatsapp.py      # WhatsApp 实现
+│   ├── slack.py         # Slack 实现
+│   ├── dingtalk.py      # 钉钉实现
+│   ├── qq.py            # QQ 实现
+│   ├── email.py         # Email 实现
+│   ├── mochat.py        # Mochat 实现
+│   ├── openapi.py       # OpenAPI HTTP 接口
+│   ├── chat.py          # CLI 交互式聊天
+│   └── single_turn.py   # CLI 单次对话
+│
+├── agent/
+│   ├── loop.py          # AgentLoop (核心 ReAct 循环)
+│   ├── context.py       # ContextBuilder (System Prompt 构建)
+│   ├── memory.py        # MemoryStore (OpenViking 记忆检索)
+│   ├── skills.py        # SkillsLoader (技能加载)
+│   └── subagent.py      # SubagentManager (后台子 Agent)
+│   └── tools/
+│       ├── registry.py  # ToolRegistry (注册/查找/执行)
+│       ├── factory.py   # register_default_tools()
+│       ├── filesystem.py
+│       ├── shell.py
+│       ├── web.py
+│       ├── websearch/
+│       ├── image.py
+│       ├── message.py
+│       ├── ov_file.py   # OpenViking 工具
+│       ├── spawn.py
+│       ├── cron.py
+│       └── mcp.py       # MCP 外部工具
+│
+├── providers/
+│   ├── base.py          # LLMProvider 抽象接口
+│   ├── litellm_provider.py  # LiteLLM 实现
+│   └── registry.py      # Provider 注册表
+│
+├── session/manager.py   # SessionManager (会话持久化)
+├── sandbox/manager.py   # SandboxManager (沙箱隔离)
+├── config/schema.py     # Pydantic 配置模型
+├── hooks/               # 钩子系统
+├── cron/service.py      # 定时任务
+├── heartbeat/service.py # 心跳检测
+├── integrations/langfuse.py  # 可观测性
+└── observability/       # 结果评估</code></pre>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <p>🐈 Vikingbot Architecture &mdash; 基于 OpenViking 的 OpenClaw-like AI Agent 框架</p>
+  <p style="margin-top: 4px; font-size: 12px;">Generated from source analysis &middot; June 2026</p>
+</footer>
+
+</body>
+</html>
