@@ -4,45 +4,20 @@ Jekyll-based GitHub Pages site (theme: minima). Hosting instructions for AI agen
 
 ## Host the project
 
-### Option A: Ruby/Jekyll available (preferred)
-
-```bash
-cd /home/xiaobin/Workspace/xiaobin83.github.io
-bundle install
-bundle exec jekyll serve --port 9090
-```
-
-### Option B: No Ruby/Jekyll (fallback)
-
-Use the custom build script and Python HTTP server:
-
 ```bash
 cd /home/xiaobin/Workspace/xiaobin83.github.io
 
-# 1. Build (Jekyll-like render: md→HTML via _layouts/)
-python3 build.py
-
-# 2. Serve
-python3 -m http.server 9090 --directory _site &
-
-# 3. Kill server when done
+# Kill any existing server
 fuser -k 9090/tcp
+
+# Start Jekyll (bind 0.0.0.0 for WSL2 → Windows browser access)
+bundle exec jekyll serve --port 9090 --host 0.0.0.0 --no-watch &
+
+# If gems are missing, install first:
+bundle install
 ```
 
-### Build script details
-
-`build.py` — A minimal Jekyll renderer:
-- Parses YAML front matter
-- Converts markdown to HTML (custom converter — does NOT handle Liquid `{% %}` tags)
-- Applies layout chain (`_layouts/*.html`)
-- Outputs to `_site/`
-- Static files (HTML, CSS) from `understanding-omo/`, `docs/` are copied as-is
-- `_posts/` are skipped (Liquid tag incompatibility)
-
-`_layouts/`:
-- `default.html` — Full HTML skeleton with solarized-light theme
-- `home.html` — Home page (wraps content in default)
-- `page.html` — Generic page (wraps content with `<h1>` title, chains to default)
+Gems are installed to `vendor/bundle/` locally (no sudo needed).
 
 ## Site structure
 
