@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第二层半 · 模型匹配深度专题 — Oh My OpenAgent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">由浅入深 · 第二层半</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="guide.html">← 返回导读</a></li>
+      <li class="nav-back"><a href="level-1-basics.html">← 第一层</a></li>
+      <li class="nav-back"><a href="level-2-agents.html">← 第二层</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">深度阅读</div>
+    <ul>
+      <li><a href="level-1-basics.html">第一层 · 基本概念</a></li>
+      <li><a href="level-2-agents.html">第二层 · Agent 系统</a></li>
+      <li><a class="current" href="level-2.5-model-matching.html">第二层半 · 模型匹配深度专题</a></li>
+      <li><a href="level-3-hooks.html">第三层 · Hook 与工具</a></li>
+      <li><a href="level-4-architecture.html">第四层 · 架构深度</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#core-insight">核心洞察：模型即开发者</a></li>
+      <li><a href="#tested-models">已测试模型清单</a></li>
+      <li><a href="#how-to-check">查看可用模型</a></li>
+      <li><a href="#recommended-stacks">推荐订阅方案</a></li>
+      <li><a href="#model-families">模型族回退链</a></li>
+      <li><a href="#cheat-sheet">替换速查表</a></li>
+      <li><a href="#agent-profiles">Agent 详细配置</a></li>
+      <li><a href="#category-models">Category 模型映射</a></li>
+      <li><a href="#safe-dangerous">安全与危险覆盖</a></li>
+      <li><a href="#resolution">模型解析流程</a></li>
+      <li><a href="#config-examples">配置示例</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="core-insight">
+  <div class="breadcrumb"><a href="guide.html">导读</a> → <a href="level-1-basics.html">第一层</a> → <a href="level-2-agents.html">第二层</a> → <span>第二层半：模型匹配深度专题</span></div>
+  <h1>第二层半 · 模型匹配深度专题</h1>
+  <p>为什么每个 Agent 需要特定的模型，以及如何自定义而不破坏系统。</p>
+
+  <h2 id="core-insight-detail">核心洞察：模型即开发者</h2>
+  <p>把 AI 模型想象成开发团队里的成员。每个模型有不同的思维模式、不同的个性、不同的优势。<strong>模型不是简单的好坏之分，而是思考方式不同。</strong>给 Claude 和 GPT 同样的指令，它们的理解方式截然不同。</p>
+  <p>这不是 bug，而是整个系统的基础设计。Oh My OpenAgent 为每个 Agent 分配与其<em>工作风格</em>匹配的模型——就像组建团队时，把每个人放在最适合他们个性的岗位上。</p>
+
+  <h3>Sisyphus：社交型技术主管</h3>
+  <p>Sisyphus 是那种认识所有人、到处走动、通过沟通和协调把事情办成的开发者。他和其他 Agent 交谈、理解整个代码库的上下文、智能地委派工作，编码能力也不错。但纯粹的深层技术难题？他会有点吃力。</p>
+  <p><strong>这就是为什么 Sisyphus 使用 Claude / Kimi / GLM。</strong>这些模型擅长：</p>
+  <ul>
+    <li>遵循复杂的多步骤指令（Sisyphus 的提示词约 1100 行）</li>
+    <li>在大量工具调用中维持对话流</li>
+    <li>理解细微的委派和编排模式</li>
+    <li>生成结构良好、富有沟通性的输出</li>
+  </ul>
+  <p>用 Sisyphus 配合较旧的 GPT 模型，就像把你最优秀的项目经理——那个协调所有人、主持站会、让整个团队保持一致的人——塞进一个房间里独自调试竞态条件。错配。GPT-5.4 和 GPT-5.5 现在有专用的 Sisyphus 提示路径，但 GPT 仍然不是编排器的推荐默认模型。</p>
+
+  <h3>Hephaestus：深度专家</h3>
+  <p>Hephaestus 是那种整天待在房间里编码的开发者。话不多，可能看起来有点社交障碍。但给他一个硬核技术难题，他会在三小时后带着一个别人找不到的解决方案出现。</p>
+  <p><strong>这就是为什么 Hephaestus 使用 GPT-5.5。</strong>GPT-5.5 为此而生：</p>
+  <ul>
+    <li>深度自主探索，无需手把手指导</li>
+    <li>跨复杂代码库的多文件推理</li>
+    <li>原则驱动执行（给目标，不是给配方）</li>
+    <li>长时间独立工作</li>
+  </ul>
+  <p>用 Hephaestus 配合 GLM 或 Kimi，就像把你最善于沟通、社交活跃的开发者分配去独自做纯技术工作。他们最终也能完成，但不会发光——你浪费了让他们有价值的技能。</p>
+
+  <h3>要点总结</h3>
+  <p>每个 Agent 的提示词都针对其模型的个性精心调整。<strong>当你更换模型时，你更换了大脑——同样的指令会被完全不同的方式理解。</strong>模型匹配不是关于"更好"或"更差"，而是关于<strong>是否合适</strong>。</p>
+
+  <h3>Claude 和 GPT 的思考差异</h3>
+  <p>这很重要，因为它解释了为什么有些 Agent 同时支持两个模型族而有些不行。</p>
+  <p><strong>Claude</strong> 对<strong>机制驱动</strong>的提示响应更好——详细的检查清单、模板、逐步流程。规则越多 = 依从性越好。你可以写一个 1100 行的提示词，包含嵌套工作流，Claude 会遵循每一步。</p>
+  <p><strong>GPT</strong>（尤其是 5.2+）对<strong>原则驱动</strong>的提示响应更好——简洁的原则、XML 结构、明确的决策标准。规则越多 = 矛盾面越多 = 偏离越严重。GPT 在你陈述目标、让它自己找出机制时表现最好。</p>
+  <p>Prometheus 曾经为这种差异维护两套独立的提示。现在它使用单个薄提示配合 <code>ulw-plan</code>，因此切换模型只改变回退选择，不改变提示文件。Atlas 仍然支持按模型族的提示行为；Prometheus 不在运行时会自动切换提示。</p>
+</section>
+
+<section id="tested-models">
+  <h2>已测试模型清单</h2>
+
+  <div class="highlight-box" style="background: linear-gradient(135deg, rgba(248,81,73,0.12), rgba(210,153,29,0.12)); border-color: var(--red);">
+    <p><strong>🚨 阅读本文前请先看这里 — Sisyphus 不是"随便什么模型都能跑"的系统 🚨</strong></p>
+  </div>
+
+  <p><strong>SISYPHUS 仅在本文档列出的精确模型上经过测试和验证——其他模型一概未测试。</strong>支持的集合经过精心设计：</p>
+
+  <table>
+    <tr><th>模型族</th><th>已测试版本</th></tr>
+    <tr>
+      <td><strong>Claude</strong></td>
+      <td>Fable 5 · Opus 4.8 · Opus 4.7 · Sonnet 4.6</td>
+    </tr>
+    <tr>
+      <td><strong>Kimi</strong></td>
+      <td>K2.7 · K2.6 · K2.5</td>
+    </tr>
+    <tr>
+      <td><strong>GLM</strong></td>
+      <td>5 / 5.1（可接受——在长嵌套工作流上略松散）</td>
+    </tr>
+    <tr>
+      <td><strong>GPT</strong></td>
+      <td>5.4 / 5.5（有专用的 GPT 提示路径——受支持，但<strong>仍非</strong>编排器的推荐默认）</td>
+    </tr>
+  </table>
+
+  <p><strong>如果某个模型不在这个列表中，它在 Sisyphus 上是 100% 未测试、100% 未验证的。</strong>它可能根本不工作；也可能看起来工作，然后在三次工具调用后崩溃。<strong>如果你发现它凑合能用了——那是个奇迹。这不是受支持的配置，未经认可，也不能保证明天还能用。</strong></p>
+
+  <p><strong>对 Sisyphus 的每一次提示变更都是针对上述模型编写、调优和回归测试的——且仅针对这些模型。</strong>没有人关注未列表模型的表现。后果可不是微妙的：</p>
+
+  <ul>
+    <li><strong>未列出的模型可能在下一个补丁时毫无征兆地崩溃。</strong>一个帮助了 Claude/Kimi 的提示调整，可能瞬间摧毁什么脆弱的东西——而我们永远不会注意到，因为我们没在测试它。别把它当成 bug 报告。它从来就不是故意能用的。</li>
+    <li><strong>提示无法修复模型。</strong>模型有硬性的、内在的特性。再多的提示雕琢也不能让一个模型做它本质上<strong>做不到</strong>的事。如果某个模型不适合编排，它就永远不适合——不管提示打磨得多完美。</li>
+  </ul>
+
+  <div class="note">
+    <p><strong>强烈不建议在任何未列出的模型上运行 Sisyphus。</strong>如果你偏要这么做，完全后果自负——并且你<em>应该</em>预料到它会崩溃。</p>
+  </div>
+
+  <h3>MiniMax / Qwen / MiMo / DeepSeek 作为 Sisyphus —— 千万别</h3>
+  <p><strong>我们没找到任何能让 MiniMax、Qwen、MiMo 或 DeepSeek 在 Sisyphus 角色上表现可接受的方法。</strong>我们试过了。它们在 Sisyphus 的嵌套 todo + 委派 + 编排提示下撑不住。这不是"再调调就行"的情况——上面说过了：<em>提示无法修复模型。</em></p>
+  <p><strong>MiniMax 和 Qwen 在 Sisyphus 角色上特别糟糕，我们几乎要完全禁止了。</strong>把<strong>"Sisyphus on MiniMax"</strong>和<strong>"Sisyphus on Qwen"</strong>当作你永远不应该碰的配置。（这些模型在其他地方仍有正当用途——MiniMax 用于快速工具回退，Qwen 用于视觉工作，下文都有说明——只是<strong>千万别</strong>作为编排器。）</p>
+</section>
+
+<section id="how-to-check">
+  <h2>查看可用模型</h2>
+  <p>在配置任何内容之前，先看看当前系统能跑什么。</p>
+
+  <h3>列出所有可用模型</h3>
+  <pre><code>opencode models</code></pre>
+  <p>这会打印你当前可以使用的每个 <code>provider/model</code> 组合。提供商来源是你已连接的身份认证 + <code>models.dev</code> 目录。OpenCode 排序输出时 <code>opencode*</code> 提供商排在前面——这是有意为之，不是美观问题。</p>
+
+  <h3>列出已连接的身份提供商</h3>
+  <pre><code>opencode auth list</code></pre>
+  <p>显示你已经登录了哪些提供商。</p>
+
+  <h3>如果想要的模型没列出</h3>
+  <p>你需要登录到那个提供商：</p>
+  <pre><code>opencode auth login</code></pre>
+  <p>交互式选择器按以下顺序优先选择提供商：</p>
+
+  <table>
+    <tr><th>优先级</th><th>提供商</th><th>说明</th></tr>
+    <tr><td>0</td><td><code>opencode</code></td><td><strong>（推荐）</strong></td></tr>
+    <tr><td>1</td><td><code>opencode-go</code></td><td>对所有人都低价的订阅</td></tr>
+    <tr><td>2</td><td><code>openai</code></td><td>ChatGPT Plus/Pro 或 API key</td></tr>
+    <tr><td>3</td><td><code>github-copilot</code></td><td>—</td></tr>
+    <tr><td>4</td><td><code>anthropic</code></td><td>API key</td></tr>
+    <tr><td>5</td><td><code>google</code></td><td>—</td></tr>
+  </table>
+
+  <p>你也可以跳过选择器：<code>opencode auth login --provider opencode-go</code>。</p>
+
+  <h3>验证 oh-my-openagent 实际使用的模型</h3>
+  <pre><code>bunx oh-my-opencode doctor</code></pre>
+  <p>这会显示每个 Agent 和 category 基于你当前身份认证状态的<strong>有效模型解析结果</strong>。如果某个 Agent 显示的是"system-default"而不是实际回退模型，说明你缺少其链中的某些提供商。</p>
+</section>
+
+<section id="recommended-stacks">
+  <h2>推荐订阅方案</h2>
+  <p>你不需要每个提供商。你只需要配好两个。</p>
+
+  <h3>最优组合：OpenCode Go + OpenAI Plus/Pro</h3>
+  <p><strong>总计约 $30/月。</strong>在成本和覆盖范围上都优于直接订阅 Anthropic + OpenAI + Google（约 $60+/月）。</p>
+
+  <table>
+    <tr><th>订阅</th><th>费用</th><th>获得内容</th><th>覆盖范围</th></tr>
+    <tr>
+      <td><strong>OpenCode Go</strong></td>
+      <td>$10/月</td>
+      <td><code>kimi-k2.5</code>, <code>kimi-k2.6</code>, <code>glm-5</code>, <code>glm-5.1</code>, <code>minimax-m2.5</code>, <code>minimax-m2.7</code>, <code>minimax-m3</code>, <code>mimo-v2-pro</code>, <code>qwen3.5-plus</code>, <code>qwen3.6-plus</code></td>
+      <td>Claude 族替代（Kimi, GLM），Gemini 族替代（Qwen），工具/检索（MiniMax）</td>
+    </tr>
+    <tr>
+      <td><strong>OpenAI Plus/Pro</strong></td>
+      <td>$20+/月</td>
+      <td><code>gpt-5.4</code>, <code>gpt-5.4-pro</code>, <code>gpt-5.5</code>, <code>gpt-5.5-codex</code></td>
+      <td>GPT 原生 Agent（Hephaestus, Oracle, Momus），模型灵活 Agent 的 GPT 回退</td>
+    </tr>
+  </table>
+
+  <h3>为什么是这个组合</h3>
+  <ol>
+    <li><strong>Hephaestus 需要 GPT-5.5。</strong>它没有 Claude 族回退。ChatGPT Plus/Pro 或 OpenAI API 是最便宜的可行路径。</li>
+    <li><strong>OpenCode Go 覆盖了编排和创意场景。</strong>Kimi K2.5/2.6 在 Sisyphus/Atlas 上的表现类似 Claude。GLM-5 填补长尾需求。Qwen 在 Gemini 不可用时处理视觉任务。</li>
+    <li><strong>没有哪个单一的提供商能覆盖一切。</strong>仅 Anthropic 的方案会导致 Hephaestus 不可用。仅 OpenAI 的方案会降低 Sisyphus 的表现。你至少需要每个族一个。</li>
+  </ol>
+
+  <h3>如果你已经有 Claude 订阅</h3>
+  <p>在安装时添加 <code>--claude=max20</code>（或 <code>yes</code>）。Claude 链默认值（Opus 4.7，快照支持）会为 Sisyphus/Prometheus/Atlas 启用，你仍然免费获得 OpenCode Go 回退。可以固定到 <code>claude-opus-4-8</code> 或 <code>claude-fable-5</code> 来使用当前顶级 Claude 配合 Sisyphus/Atlas 调优提示；Prometheus 保持其单一 <code>ulw-plan</code> 支持的提示。最佳编排 + 预算安全网。</p>
+
+  <h3>如果你没有任何订阅</h3>
+  <p>仅 OpenCode Go 可以让 Sisyphus/Atlas/Oracle/Librarian/Explore 工作。没有 GPT 访问权，Hephaestus 不会激活，所以你会失去自主深度工作能力。建议尽快添加 ChatGPT Plus。</p>
+
+  <h3>方案总结</h3>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>最优方案</h4>
+      <p><strong>OpenCode Go + OpenAI Plus/Pro</strong></p>
+      <p>约 $30/月。覆盖所有 Agent。Hephaestus 可用。Sisyphus 用 Kimi，深度工作用 GPT。</p>
+    </div>
+    <div class="card">
+      <h4>全原生方案</h4>
+      <p><strong>Anthropic + OpenAI + Google</strong></p>
+      <p>约 $60+/月。最高质量，无惊喜。所有模型原生连接。</p>
+    </div>
+    <div class="card">
+      <h4>预算方案</h4>
+      <p><strong>仅 OpenCode Go</strong></p>
+      <p>$10/月。Sisyphus/Atlas/Oracle 可用。Hephaestus 无法激活——接受这个权衡。</p>
+    </div>
+  </div>
+</section>
+
+<section id="model-families">
+  <h2>模型族回退链</h2>
+  <p>当"原生"模型不可用时，oh-my-openagent 沿每个 Agent 的回退链逐个尝试直到连接成功。这些链硬编码在 <code>packages/omo-opencode/src/shared/model-requirements.ts</code> 中。<strong>不存在单一的全局优先级列表。</strong>每个 Agent 和每个 category 都有自己的链。</p>
+
+  <p>系统包含两个独立的回退机制：</p>
+  <ul>
+    <li><strong>model-fallback</strong>：主动解析，在 <code>chat.params</code> 中使用硬编码的 <code>AGENT_MODEL_REQUIREMENTS</code> 和 <code>CATEGORY_MODEL_REQUIREMENTS</code> 替换模型</li>
+    <li><strong>runtime-fallback</strong>：被动恢复，响应 <code>session.error</code> 事件，可在 runtime-fallback hooks 中按 category/agent 配置</li>
+  </ul>
+
+  <h3>关于当前顶级模型与自动解析链的说明</h3>
+  <p>两个东西以不同速度更新，这种差异解释了为什么下面仍能看到"Opus 4.7"作为默认值：</p>
+  <ul>
+    <li><strong>当前的顶级模型</strong>是 Claude <strong>Fable 5</strong> 和 <strong>Opus 4.8</strong>，以及 Kimi <strong>K2.7</strong>。Sisyphus 和 Atlas 有针对这些模型专用的调优提示路径；Prometheus 保持一个 <code>ulw-plan</code> 支持的提示。你可以在配置中固定使用：<code>"anthropic/claude-opus-4-8"</code>、<code>"anthropic/claude-fable-5"</code>、<code>"opencode-go/kimi-k2.7"</code>。想显式选择较新模型时使用。</li>
+    <li><strong>自动解析回退链</strong>下面的优先级仍以 <strong>Opus 4.7</strong> 和 <strong>Kimi K2.6</strong> 开头。这是有意为之，而不是过时的：链只自动选择捆绑能力快照所构建的模型，以确保变体和上下文窗口解析正确。它们在 Opus 4.8 / K2.7 进入模型目录后会提升为链默认值；在此之前，你可以通过显式命名来选用较新模型及其提示。</li>
+  </ul>
+  <p>所以下面的链中的"Opus 4.7 (max)"条目是快照支持的基础，不是建议优先选择 4.7 而非 4.8。</p>
+
+  <h3>Claude 族（沟通型，指令跟随）</h3>
+  <p>使用者：Sisyphus, Atlas, Sisyphus-Junior, Metis（Claude 路径）, Prometheus（主要回退）, <code>unspecified-low</code>, <code>unspecified-high</code>。</p>
+
+  <table>
+    <tr><th>优先级</th><th>模型</th><th>提供商</th><th>说明</th></tr>
+    <tr>
+      <td>1</td>
+      <td><code>claude-fable-5</code> / <code>claude-opus-4-8</code> / <code>claude-opus-4-7</code> (max)</td>
+      <td><code>anthropic</code>, <code>github-copilot</code>, <code>opencode</code>, <code>vercel</code></td>
+      <td>对约 1100 行的 Sisyphus 提示有最佳依从性。Sisyphus 为所有三个版本携带每版本提示；Prometheus 使用其单一 <code>ulw-plan</code> 支持的提示。Opus 4.7 是硬编码的链默认值，用于预算稳定性。</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><code>claude-sonnet-4-6</code></td>
+      <td>同上</td>
+      <td>更快、更便宜，仍是 Claude。</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><strong><code>kimi-k2.7</code> — 推荐替代（最新）</strong></td>
+      <td><code>opencode-go</code>, <code>kimi-for-coding</code>, <code>moonshotai</code>, <code>opencode</code>, <code>vercel</code></td>
+      <td>克制、结果优先，是 Anthropic 未连接时最佳的 Kimi。有 Kimi 特定提示路径的 Agent 使用其 K2.7 调优；Prometheus 保持其 <code>ulw-plan</code> 支持的提示。</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><strong><code>kimi-k2.6</code> 或 <code>kimi-k2.5</code> — 推荐替代</strong></td>
+      <td>同 K2.7</td>
+      <td>指令跟随能力与 Claude 非常相似。链中当前默认的 Kimi。</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><strong><code>glm-5</code> 或 <code>glm-5.1</code> — 可接受替代</strong></td>
+      <td><code>opencode-go</code>, <code>zai-coding-plan</code>, <code>opencode</code>, <code>vercel</code></td>
+      <td>表现类似 Claude，在长嵌套工作流上略松散。可靠的回退。</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><code>big-pickle</code> (GLM 4.6)</td>
+      <td><code>opencode</code></td>
+      <td>免费层安全网。</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p><strong>Kimi ≻ GLM。</strong>Kimi（最新 K2.7，然后 K2.6/K2.5）在 Sisyphus 的嵌套 todo+委派提示下比 GLM 表现更好。两者可用时优先使用 Kimi。</p>
+  </div>
+
+  <h3>GPT 族（原则驱动，自主执行）</h3>
+  <p>使用者：Hephaestus, Oracle, Momus, <code>deep</code>, <code>ultrabrain</code>, <code>quick</code>, Prometheus（GPT 回退）, Atlas（GPT 路径）。</p>
+
+  <table>
+    <tr><th>优先级</th><th>模型</th><th>提供商</th><th>说明</th></tr>
+    <tr>
+      <td>1</td>
+      <td><code>gpt-5.5</code> / <code>gpt-5.4</code> (pro / xhigh / high / medium)</td>
+      <td><code>openai</code>, <code>github-copilot</code>, <code>opencode</code>, <code>vercel</code></td>
+      <td>原生 OpenAI 是原则驱动提示的黄金标准。Hephaestus 需要这个族。</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><code>gpt-5.5-codex</code></td>
+      <td>同上</td>
+      <td>仍然是深度编码的动力之源。保留为显式覆盖选项。</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><strong>DeepSeek — 有限替代</strong> (<code>deepseek-v3.2</code>, <code>deepseek-chat-v3.1</code>)</td>
+      <td><code>openrouter/deepseek</code></td>
+      <td>最接近的 OSS 自主编码行为等价物。未接入默认链——通过 <code>fallback_models</code> 添加。</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><strong>MiniMax — 强烈不建议</strong> (<code>minimax-m3</code>, <code>minimax-m2.7</code>, <code>minimax-m2.5</code>)</td>
+      <td><code>opencode-go</code>, <code>opencode</code>, <code>openrouter/minimax</code></td>
+      <td>仅在<strong>工具</strong>回退链中使用（Explore, Librarian, <code>quick</code>）。一致性和长上下文管理问题使其不适合替代 Hephaestus/Oracle。不要将 deep agent 覆盖为 MiniMax。</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p><strong>DeepSeek ≻≻ MiniMax。</strong>DeepSeek 保留了 GPT 的自主探索特性。MiniMax 在多步深度工作中会失去连贯性。MiniMax 适合 grep 风格的工具 Agent，仅此而已。</p>
+  </div>
+
+  <h3>Gemini 族（视觉，不同推理风格）</h3>
+  <p>使用者：<code>visual-engineering</code>, <code>artistry</code>, Oracle（视觉回退）, Multimodal-Looker。</p>
+
+  <table>
+    <tr><th>优先级</th><th>模型</th><th>提供商</th><th>说明</th></tr>
+    <tr>
+      <td>1</td>
+      <td><code>gemini-3.1-pro</code> (high)</td>
+      <td><code>google</code>, <code>github-copilot</code>, <code>opencode</code>, <code>vercel</code></td>
+      <td>最适合 UI/UX、CSS、设计令牌、布局决策。<code>artistry</code> category <strong>需要</strong>此族。</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><code>gemini-3-flash</code></td>
+      <td>同上</td>
+      <td>快速变体，写作/文档任务。</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><strong>Qwen — 替代</strong> (<code>qwen3.6-plus</code>, <code>qwen3.5-plus</code>)</td>
+      <td><code>opencode-go</code>, <code>openrouter/qwen</code></td>
+      <td>Google 未连接时最有视觉能力的替代品。推理风格不同，但能胜任视觉任务。</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p><strong>这里没有 GLM/Kimi。</strong>它们不是用于视觉工作的 Gemini 替代品。视觉任务请用 Qwen。</p>
+  </div>
+
+  <h3>OpenCode Go 模型详情</h3>
+  <p>OpenCode Go 是高级订阅层级（$10/月），通过 OpenCode 的基础设施提供对中国前沿模型的可靠访问。</p>
+
+  <table>
+    <tr><th>模型</th><th>用例</th></tr>
+    <tr><td><code>opencode-go/kimi-k2.6</code></td><td>视觉能力，Claude 类推理。由 Sisyphus、Atlas、Sisyphus-Junior、Multimodal Looker 使用。</td></tr>
+    <tr><td><code>opencode-go/glm-5.1</code></td><td>纯文本编排模型。由 Oracle、Prometheus、Metis、Momus 使用。</td></tr>
+    <tr><td><code>opencode-go/minimax-m3</code></td><td>OpenCode Go 上最新的 MiniMax 旗舰。Atlas、Sisyphus-Junior、Explore 和 Librarian 的主要 MiniMax 回退，优先于 M2.7。</td></tr>
+    <tr><td><code>opencode-go/minimax-m2.7</code></td><td>超便宜，响应快。Atlas、Sisyphus-Junior、Explore 和 Librarian 的工具回退使用。</td></tr>
+    <tr><td><code>opencode-go/qwen3.5-plus</code></td><td>Qwen 编码模型，在 GPT-5.4 Mini Fast 不可用时作为 Explore 和 Librarian 的第一个 OpenCode Go 工具回退。</td></tr>
+  </table>
+
+  <h3>免费层回退说明</h3>
+  <p>你可能在源码或日志中看到像 <code>kimi-k2.5-free</code>、<code>minimax-m3</code>、<code>minimax-m2.7</code>、<code>minimax-m2.7-highspeed</code> 或 <code>big-pickle</code> (GLM 4.6) 这样的模型名称。这些是提供商标识或速度优化条目。你不需要配置它们。系统包含它们是为了在你没有所有付费订阅时优雅降级。如果你有付费版本，付费版本总是优先。</p>
+</section>
+
+<section id="cheat-sheet">
+  <h2>替换速查表</h2>
+
+  <table>
+    <tr><th>如果你失去了...</th><th>按顺序替换为</th><th>避免使用</th></tr>
+    <tr>
+      <td>Claude Opus/Sonnet</td>
+      <td>Kimi K2.7 → K2.6/K2.5 → GLM 5 → Big Pickle</td>
+      <td>较旧的 GPT 模型</td>
+    </tr>
+    <tr>
+      <td>GPT-5.4/5.5</td>
+      <td>GPT-5.5 Codex → DeepSeek v3.2</td>
+      <td>MiniMax（除非用于工具工作）</td>
+    </tr>
+    <tr>
+      <td>Gemini 3.1 Pro</td>
+      <td>Qwen 3.6-plus / 3.5-plus</td>
+      <td>Claude/Kimi（视觉任务推理风格错误）</td>
+    </tr>
+    <tr>
+      <td>Grok Code Fast 1（Explore）</td>
+      <td>GPT-5.4 Mini Fast → MiniMax M2.7 Highspeed → MiniMax M3 → Claude Haiku</td>
+      <td>Opus（巨大的成本浪费）</td>
+    </tr>
+  </table>
+</section>
+
+<section id="agent-profiles">
+  <h2>Agent 详细配置</h2>
+  <p>以下是来自 <code>packages/omo-opencode/src/shared/model-requirements.ts</code> 的精确运行时链。</p>
+
+  <h3>沟通型 → Claude / Kimi / GLM</h3>
+  <p>这些 Agent 有 Claude 优化的提示词——长篇、详细、机制驱动。它们需要能可靠遵循复杂多层指令的模型。</p>
+
+  <table>
+    <tr><th>Agent</th><th>角色</th><th>回退链</th></tr>
+    <tr>
+      <td><strong>Sisyphus</strong></td>
+      <td>主编排器</td>
+      <td><code>anthropic|github-copilot|opencode|vercel/claude-opus-4-7</code> (max) → <code>opencode-go|vercel/kimi-k2.6</code> → <code>kimi-for-coding/k2p5</code> → <code>opencode|moonshotai|moonshotai-cn|firmware|ollama-cloud|aihubmix|vercel/kimi-k2.5</code> → <code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (medium) → <code>zai-coding-plan|opencode|vercel/glm-5</code> → <code>opencode/big-pickle</code></td>
+    </tr>
+    <tr>
+      <td><strong>Metis</strong></td>
+      <td>计划差距分析</td>
+      <td><code>anthropic|github-copilot|opencode|vercel/claude-sonnet-4-6</code> → <code>anthropic|github-copilot|opencode|vercel/claude-opus-4-7</code> (max) → <code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (high) → <code>opencode-go|vercel/glm-5.1</code> → <code>kimi-for-coding/k2p5</code></td>
+    </tr>
+  </table>
+
+  <h3>模型灵活的计划型 → Claude 优先，GPT 支持</h3>
+  <p>这些 Agent 可以在 Claude、GPT 和 Claude 类模型之间回退。Atlas 有按模型族的提示行为；Prometheus 使用一个 <code>ulw-plan</code> 支持的提示，不随模型族变化。</p>
+
+  <table>
+    <tr><th>Agent</th><th>角色</th><th>回退链</th></tr>
+    <tr>
+      <td><strong>Prometheus</strong></td>
+      <td>战略规划师</td>
+      <td><code>anthropic|github-copilot|opencode|vercel/claude-opus-4-7</code> (max) → <code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (high) → <code>opencode-go|vercel/glm-5.1</code> → <code>google|github-copilot|opencode|vercel/gemini-3.1-pro</code></td>
+    </tr>
+    <tr>
+      <td><strong>Atlas</strong></td>
+      <td>Todo 编排器</td>
+      <td><code>anthropic|github-copilot|opencode|vercel/claude-sonnet-4-6</code> → <code>opencode-go|vercel/kimi-k2.6</code> → <code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (medium) → <code>opencode-go|vercel/minimax-m3</code> → <code>opencode-go|vercel/minimax-m2.7</code></td>
+    </tr>
+  </table>
+
+  <h3>深度专家 → GPT</h3>
+  <p>这些 Agent 为 GPT 的原则驱动风格构建。它们的提示词假定自主、目标导向的执行。<strong>不要覆盖为 Claude。</strong></p>
+
+  <table>
+    <tr><th>Agent</th><th>角色</th><th>回退链</th></tr>
+    <tr>
+      <td><strong>Hephaestus</strong></td>
+      <td>自主深度工作者</td>
+      <td><code>openai|github-copilot|venice|opencode|vercel/gpt-5.5</code> (medium)——单条目链，需要这些提供商之一。工匠。</td>
+    </tr>
+    <tr>
+      <td><strong>Oracle</strong></td>
+      <td>架构顾问</td>
+      <td><code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (high) → <code>google|github-copilot|opencode|vercel/gemini-3.1-pro</code> (high) → <code>anthropic|github-copilot|opencode|vercel/claude-opus-4-7</code> (max) → <code>opencode-go|vercel/glm-5.1</code></td>
+    </tr>
+    <tr>
+      <td><strong>Momus</strong></td>
+      <td>无情审查官</td>
+      <td><code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (xhigh) → <code>anthropic|github-copilot|opencode|vercel/claude-opus-4-7</code> (max) → <code>google|github-copilot|opencode|vercel/gemini-3.1-pro</code> (high) → <code>opencode-go|vercel/glm-5.1</code></td>
+    </tr>
+  </table>
+
+  <h3>工具执行者 → 速度优先</h3>
+  <p>这些 Agent 做 grep、搜索和检索。它们故意使用最快、最便宜的模型。<strong>不要给它们"升级"到 Opus</strong>——那是雇高级工程师来归档文件。</p>
+
+  <table>
+    <tr><th>Agent</th><th>角色</th><th>回退链</th></tr>
+    <tr>
+      <td><strong>Explore</strong></td>
+      <td>快速代码库 grep</td>
+      <td><code>openai/gpt-5.4-mini-fast</code> → <code>opencode-go/qwen3.5-plus</code> → <code>vercel/minimax-m2.7-highspeed</code> → <code>opencode-go|vercel/minimax-m3</code> → <code>opencode-go|vercel/minimax-m2.7</code> → <code>anthropic|vercel/claude-haiku-4-5</code> → <code>openai|vercel/gpt-5.4-nano</code></td>
+    </tr>
+    <tr>
+      <td><strong>Librarian</strong></td>
+      <td>文档/代码搜索</td>
+      <td>同 Explore</td>
+    </tr>
+    <tr>
+      <td><strong>Multimodal Looker</strong></td>
+      <td>视觉/截图分析</td>
+      <td><code>openai|opencode|vercel/gpt-5.5</code> (medium) → <code>opencode-go|vercel/kimi-k2.6</code> → <code>zai-coding-plan|vercel/glm-4.6v</code> → <code>openai|github-copilot|opencode|vercel/gpt-5-nano</code></td>
+    </tr>
+    <tr>
+      <td><strong>Sisyphus-Junior</strong></td>
+      <td>Category 执行器</td>
+      <td><code>anthropic|github-copilot|opencode|vercel/claude-sonnet-4-6</code> → <code>opencode-go|vercel/kimi-k2.6</code> → <code>openai|github-copilot|opencode|vercel/gpt-5.5</code> (medium) → <code>opencode-go|vercel/minimax-m3</code> → <code>opencode-go|vercel/minimax-m2.7</code> → <code>opencode/big-pickle</code></td>
+    </tr>
+  </table>
+</section>
+
+<section id="category-models">
+  <h2>Category 模型映射</h2>
+  <p>当 Agent 委派工作时，它们不选择模型名称——它们选择一个 <strong>category</strong>。category 自动映射到正确的模型。</p>
+
+  <table>
+    <tr><th>Category</th><th>用途</th><th>默认模型</th><th>回退链</th></tr>
+    <tr>
+      <td><code>visual-engineering</code></td>
+      <td>前端、UI、CSS、设计</td>
+      <td><code>google/gemini-3.1-pro</code> (high)</td>
+      <td>Gemini → <code>zai-coding-plan/glm-5</code> → <code>claude-opus-4-7</code> (max) → <code>opencode-go/glm-5.1</code> → <code>kimi-for-coding/k2p5</code></td>
+    </tr>
+    <tr>
+      <td><code>artistry</code></td>
+      <td>创意、新颖方法</td>
+      <td><code>google/gemini-3.1-pro</code> (high)</td>
+      <td>Gemini → <code>claude-opus-4-7</code> (max) → <code>gpt-5.5</code></td>
+    </tr>
+    <tr>
+      <td><code>ultrabrain</code></td>
+      <td>最大推理需求</td>
+      <td><code>openai/gpt-5.5</code> (xhigh)</td>
+      <td>GPT-5.5 xhigh → <code>gemini-3.1-pro</code> (high) → <code>claude-opus-4-7</code> (max) → <code>opencode-go/glm-5.1</code></td>
+    </tr>
+    <tr>
+      <td><code>deep</code></td>
+      <td>深度编码、复杂逻辑</td>
+      <td><code>openai/gpt-5.5</code> (medium)</td>
+      <td>GPT-5.5 → <code>claude-opus-4-7</code> (max) → <code>gemini-3.1-pro</code> (high)</td>
+    </tr>
+    <tr>
+      <td><code>quick</code></td>
+      <td>简单快速任务</td>
+      <td><code>openai/gpt-5.4-mini</code></td>
+      <td>GPT-5.4-mini → <code>anthropic|github-copilot|vercel/claude-haiku-4-5</code> → <code>gemini-3-flash</code> → <code>opencode-go/minimax-m3</code> → <code>opencode-go/minimax-m2.7</code> → <code>opencode/gpt-5-nano</code></td>
+    </tr>
+    <tr>
+      <td><code>unspecified-high</code></td>
+      <td>通用复杂工作</td>
+      <td><code>anthropic/claude-opus-4-7</code> (max)</td>
+      <td>Opus → <code>gpt-5.5</code> (high) → <code>zai-coding-plan/glm-5</code> → <code>kimi-for-coding/k2p5</code> → <code>opencode-go/glm-5.1</code> → <code>opencode/kimi-k2.5</code> → <code>moonshotai/kimi-k2.5</code></td>
+    </tr>
+    <tr>
+      <td><code>unspecified-low</code></td>
+      <td>通用标准工作</td>
+      <td><code>anthropic/claude-sonnet-4-6</code></td>
+      <td>Sonnet → <code>gpt-5.5-codex</code> (medium) → <code>opencode-go/kimi-k2.6</code> → <code>google/gemini-3-flash</code> → <code>opencode-go/minimax-m3</code> → <code>opencode-go/minimax-m2.7</code></td>
+    </tr>
+    <tr>
+      <td><code>writing</code></td>
+      <td>文本、文档、散文</td>
+      <td><code>kimi-for-coding/k2p5</code></td>
+      <td><code>gemini-3-flash</code> → <code>opencode-go/kimi-k2.6</code> → <code>claude-sonnet-4-6</code> → <code>opencode-go/minimax-m3</code> → <code>opencode-go/minimax-m2.7</code></td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p><strong>Vercel AI Gateway 回退覆盖：</strong><code>packages/omo-opencode/src/shared/model-requirements.ts</code> 在几乎所有兼容网关的回退条目中都包含 <code>vercel</code>。把它当成所列模型 ID 的通用额外提供商路径，而不是不同的模型族。</p>
+  </div>
+</section>
+
+<section id="safe-dangerous">
+  <h2>安全与危险覆盖</h2>
+
+  <h3>安全 —— 相同个性类型</h3>
+  <table>
+    <tr><th>Agent</th><th>安全替换</th></tr>
+    <tr><td>Sisyphus</td><td>Opus → Sonnet, Kimi K2.5/2.6, GLM 5（都是沟通型模型）</td></tr>
+    <tr><td>Prometheus</td><td>Opus → GPT-5.5（同一 <code>ulw-plan</code> 支持的提示，不同模型）</td></tr>
+    <tr><td>Atlas</td><td>Claude Sonnet 4.6 → Kimi K2.6 → GPT-5.5（自动切换到 GPT 提示）</td></tr>
+  </table>
+
+  <h3>危险 —— 个性不匹配</h3>
+  <table>
+    <tr><th>配置</th><th>风险说明</th></tr>
+    <tr>
+      <td><strong>Sisyphus → 不在测试列表中的任何模型</strong></td>
+      <td>支持集合限 Claude（Fable 5 / Opus 4.8 / 4.7 / Sonnet 4.6）、Kimi（K2.7 / K2.6 / K2.5）、GLM（5 / 5.1）、GPT（5.4 / 5.5）。其他一切未经测试，可能在下一个补丁时崩溃。<strong>提示无法修复模型</strong>——如果不合适，再怎么调也没用。</td>
+    </tr>
+    <tr>
+      <td><strong>Sisyphus → MiniMax / Qwen</strong></td>
+      <td><strong>强烈不建议到"几乎禁止"的程度。</strong>两者在编排提示下都撑不住。永远不要把它们用作编排器。</td>
+    </tr>
+    <tr>
+      <td><strong>Sisyphus → MiMo / DeepSeek</strong></td>
+      <td>未找到可行的配置。作为编排器未测试且不支持。</td>
+    </tr>
+    <tr>
+      <td><strong>Sisyphus → 较旧 GPT 模型</strong></td>
+      <td>仍然不合适。GPT-5.4 和 GPT-5.5 是仅有的专用 GPT 提示路径。</td>
+    </tr>
+    <tr>
+      <td><strong>Hephaestus → Claude</strong></td>
+      <td>为 Codex 的自主风格构建。Claude 无法复制这一点。</td>
+    </tr>
+    <tr>
+      <td><strong>Hephaestus → MiniMax</strong></td>
+      <td>MiniMax 在多步深度工作中失去连贯性。<strong>永远不要这样做。</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Oracle → MiniMax</strong></td>
+      <td>同样原因。Oracle 需要持续推理；MiniMax 会偏离。</td>
+    </tr>
+    <tr>
+      <td><strong>Explore → Opus</strong></td>
+      <td>巨大的成本浪费。Explore 需要速度，不是智能。</td>
+    </tr>
+    <tr>
+      <td><strong>Librarian → Opus</strong></td>
+      <td>同上。文档搜索不需要 Opus 级的推理。</td>
+    </tr>
+    <tr>
+      <td><strong><code>visual-engineering</code> → Kimi/GLM</strong></td>
+      <td>错误的推理风格。Gemini 不可用时用 Qwen，不要用 Claude 类模型。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="resolution">
+  <h2>模型解析流程</h2>
+  <p>每个 Agent 都有一个回退链。系统按优先级顺序尝试模型，直到通过你连接的提供商找到一个可用的。你不需要为每个模型配置提供商。只需认证（<code>opencode auth login</code>），系统会计算出哪些模型可用以及在哪里。</p>
+
+  <p>解析管道（来自 <code>packages/omo-opencode/src/shared/model-resolution-pipeline.ts</code>）：</p>
+
+  <div class="layer-diagram">
+    <div class="layer layer-core">
+      <div class="name">第 1 步：用户覆盖（Override）</div>
+      <div class="desc">用户显式配置或 UI 选择的模型（仅主 Agent）</div>
+    </div>
+    <div class="layer layer-mcp">
+      <div class="name">第 2 步：Category 默认值</div>
+      <div class="desc">来自 category 配置（当 Agent 设置了 category 时）</div>
+    </div>
+    <div class="layer layer-skills">
+      <div class="name">第 3 步：用户 fallback_models</div>
+      <div class="desc">配置的字符串/对象，在硬编码链之前尝试</div>
+    </div>
+    <div class="layer layer-adapter">
+      <div class="name">第 4 步：提供商回退</div>
+      <div class="desc">AGENT_MODEL_REQUIREMENTS / CATEGORY_MODEL_REQUIREMENTS</div>
+    </div>
+    <div class="layer layer-platform">
+      <div class="name">第 5 步：系统默认值</div>
+      <div class="desc">最终安全网</div>
+    </div>
+  </div>
+
+  <pre><code>Agent 请求 → 用户覆盖（如有）→ 回退链 → 系统默认值</code></pre>
+
+  <p>核心 Agent 的 tab 切换是确定性的，通过注入的运行时顺序字段实现。固定优先级顺序是 Sisyphus（order: 0）、Hephaestus（order: 1）、Prometheus（order: 2）、Atlas（order: 3），其余 Agent 随后排列。</p>
+
+  <p>你的显式配置总是优先。如果你为某个 Agent 设置了特定的模型，即使解析数据未缓存，该选择也优先。</p>
+
+  <p>Variant 和 <code>reasoningEffort</code> 覆盖会标准化为模型支持的值，因此跨提供商的覆盖会优雅降级而不是硬失败。</p>
+
+  <p>模型能力由 <code>models.dev</code> 支持，有可刷新的缓存和能力诊断。使用 <code>bunx oh-my-opencode refresh-model-capabilities</code> 更新缓存，或配置 <code>model_capabilities.auto_refresh_on_start</code> 在启动时刷新。</p>
+
+  <p>要查看你的 Agent 实际使用的模型，运行 <code>bunx oh-my-opencode doctor</code>。它基于你当前的身份认证和配置显示有效的模型解析结果。</p>
+
+  <h3>基于文件的提示词</h3>
+  <p>你可以使用 <code>file://</code> URL 在 <code>prompt</code> 字段中加载 Agent 系统提示词，或使用 <code>prompt_append</code> 附加额外内容。<code>prompt_append</code> 字段也适用于 category。</p>
+
+  <pre><code>{
+  "agents": {
+    "sisyphus": {
+      "prompt": "file:///path/to/custom-prompt.md",
+    },
+    "oracle": {
+      "prompt_append": "file:///path/to/additional-context.md",
+    },
+  },
+  "categories": {
+    "deep": {
+      "prompt_append": "file:///path/to/deep-category-append.md",
+    },
+  },
+}</code></pre>
+
+  <p>文件内容在运行时加载并注入到 Agent 的系统提示词中。支持 <code>~</code> 扩展到家目录和相对 <code>file://</code> 路径。</p>
+</section>
+
+<section id="config-examples">
+  <h2>配置示例</h2>
+
+  <h3>示例 A — 推荐方案（OpenCode Go + OpenAI Plus/Pro）</h3>
+  <pre><code>{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+
+  "agents": {
+    // Sisyphus: Kimi K2.7 是编排方面仅次于 Claude 的最佳选择
+    "sisyphus": {
+      "model": "opencode-go/kimi-k2.7",
+      "ultrawork": { "model": "opencode-go/kimi-k2.7" },
+    },
+
+    // Hephaestus: 需要 GPT。ChatGPT Plus 就能满足。
+    "hephaestus": { "model": "openai/gpt-5.5", "variant": "medium" },
+
+    // 架构咨询: GPT 或 Claude Opus
+    "oracle": { "model": "openai/gpt-5.5", "variant": "high" },
+
+    // Prometheus 跨模型族保持同一 ulw-plan 支持的提示
+    "prometheus": { "model": "opencode-go/kimi-k2.7" },
+
+    // Atlas 也是沟通型——Kimi 工作得很好
+    "atlas": { "model": "opencode-go/kimi-k2.7" },
+
+    // 工具 Agent 保持低成本
+    "explore": { "model": "opencode-go/qwen3.5-plus" },
+    "librarian": { "model": "opencode-go/qwen3.5-plus" },
+  },
+
+  "categories": {
+    "visual-engineering": { "model": "opencode-go/qwen3.6-plus" },  // Qwen 作为 Gemini 替代
+    "deep": { "model": "openai/gpt-5.5", "variant": "medium" },
+    "ultrabrain": { "model": "openai/gpt-5.5", "variant": "xhigh" },
+    "quick": { "model": "openai/gpt-5.4-mini" },
+    "unspecified-low": { "model": "opencode-go/kimi-k2.7" },
+    "unspecified-high": { "model": "opencode-go/kimi-k2.7" },
+    "writing": { "model": "opencode-go/kimi-k2.7" },
+  },
+
+  "background_task": {
+    "providerConcurrency": {
+      "openai": 3,
+      "opencode-go": 10,
+    },
+  },
+}</code></pre>
+
+  <h3>示例 B — 全原生（Anthropic + OpenAI + Google）</h3>
+  <p>最高质量，最高成本。无惊喜。</p>
+  <pre><code>{
+  "agents": {
+    "sisyphus": {
+      "model": "anthropic/claude-opus-4-8",
+      "variant": "max",
+    },
+    "hephaestus": { "model": "openai/gpt-5.5", "variant": "medium" },
+    "oracle": { "model": "openai/gpt-5.5", "variant": "high" },
+  },
+  "categories": {
+    "visual-engineering": { "model": "google/gemini-3.1-pro", "variant": "high" },
+    "deep": { "model": "openai/gpt-5.5", "variant": "medium" },
+    "unspecified-high": { "model": "anthropic/claude-opus-4-8", "variant": "max" },
+  },
+}</code></pre>
+
+  <h3>示例 C — 仅 OpenCode Go（预算方案，无 GPT）</h3>
+  <p>最便宜的全栈路径。Hephaestus 不会激活——接受这个权衡。</p>
+  <pre><code>{
+  "agents": {
+    "sisyphus": { "model": "opencode-go/kimi-k2.7" },
+    "atlas": { "model": "opencode-go/kimi-k2.7" },
+    // 省略 hephaestus；它需要 GPT。
+    "oracle": { "model": "opencode-go/glm-5.1" },  // 降级但可用
+    "explore": { "model": "opencode-go/qwen3.5-plus" },
+    "librarian": { "model": "opencode-go/qwen3.5-plus" },
+  },
+  "categories": {
+    "visual-engineering": { "model": "opencode-go/qwen3.6-plus" },
+    "deep": { "model": "opencode-go/kimi-k2.7" },  // 不理想——Kimi 不是 GPT，但已是最好的可用选择
+    "unspecified-high": { "model": "opencode-go/kimi-k2.7" },
+    "unspecified-low": { "model": "opencode-go/kimi-k2.7" },
+    "quick": { "model": "opencode-go/minimax-m2.7" },
+    "writing": { "model": "opencode-go/kimi-k2.7" },
+  },
+}</code></pre>
+
+  <h3>示例 D — 添加 DeepSeek 作为 GPT 替代</h3>
+  <p>如果你有 OpenRouter 并希望在 GPT 不可用时将 DeepSeek 加入链：</p>
+  <pre><code>{
+  "agents": {
+    "oracle": {
+      "model": "openai/gpt-5.5",
+      "variant": "high",
+      "fallback_models": [
+        "anthropic/claude-opus-4-8",
+        { "model": "openrouter/deepseek/deepseek-v3.2", "temperature": 0.7 },
+        "opencode-go/glm-5.1",
+      ],
+    },
+  },
+}</code></pre>
+
+  <p><code>fallback_models</code> 接受纯模型字符串和包含 <code>variant</code>、<code>reasoningEffort</code>、<code>temperature</code>、<code>top_p</code>、<code>maxTokens</code>、<code>thinking</code> 的逐个回退对象的混合数组。</p>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="level-2-agents.html">← 上一层：Agent 系统</a>
+  <a class="next" href="level-3-hooks.html">下一层：Hook 与工具 →</a>
+</div>
+
+</main>
+</body>
+</html>

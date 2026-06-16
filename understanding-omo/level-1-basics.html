@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>由浅入深：第一层 · 基本概念 — Oh My OpenAgent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">由浅入深 · 第一层</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="guide.html">← 返回导读</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">深度阅读</div>
+    <ul>
+      <li><a class="current" href="level-1-basics.html">第一层 · 基本概念</a></li>
+      <li><a href="level-2-agents.html">第二层 · Agent 系统</a></li>
+      <li><a href="level-2.5-model-matching.html">第二层半 · 模型匹配</a></li>
+      <li><a href="level-3-hooks.html">第三层 · Hook 与工具</a></li>
+      <li><a href="level-4-architecture.html">第四层 · 架构深度</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#what-is">OmO 是什么</a></li>
+      <li><a href="#why">为什么需要 OmO</a></li>
+      <li><a href="#philosophy">核心哲学</a></li>
+      <li><a href="#modes">两种工作模式</a></li>
+      <li><a href="#intentgate">IntentGate</a></li>
+      <li><a href="#editions">两版发行</a></li>
+      <li><a href="#quickstart">快速开始</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="what-is">
+  <div class="breadcrumb">
+    <a href="guide.html">导读</a> → <span>第一层：基本概念</span>
+  </div>
+
+  <h1>OmO 是什么</h1>
+
+  <p>Oh My OpenAgent（简称 OmO）是一个面向 AI 编程助手的<strong>多模型智能体编排插件</strong>。它不是一套提示词模板，也不是一个简单的工具集合——它是一个完整的<strong>智能体操作系统</strong>，运行在 OpenCode 之上，将单一的 AI 会话转变为一支协调的开发团队。</p>
+
+  <p>OmO 的核心理念很简单：<strong>不让任何一个模型做所有事</strong>。Claude Opus 擅长规划和编排，GPT-5.5 擅长深度推理和代码生成，Kimi K2.6 在中文理解和长上下文上表现优异，Gemini 在前端和视觉任务上有独特优势。OmO 让它们各司其职，自动协作，你不需要知道背后是谁在工作。</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">11</div><div class="label">核心 Agent</div></div>
+    <div class="stat"><div class="num">20–39</div><div class="label">工具 (按配置)</div></div>
+    <div class="stat"><div class="num">54–61</div><div class="label">生命周期 Hook</div></div>
+    <div class="stat"><div class="num">38</div><div class="label">Monorepo 包</div></div>
+    <div class="stat"><div class="num">3</div><div class="label">级 MCP 系统</div></div>
+  </div>
+
+  <div class="highlight-box">
+    <p><strong>一句话概括：</strong>安装 OmO，输入 <code>ultrawork</code>，然后放手。它会自己规划、自己执行、自己修复——直到工作完成。</p>
+  </div>
+</section>
+
+<section id="why">
+  <h2>为什么需要 OmO</h2>
+
+  <h3>单一模型的锁死效应</h3>
+
+  <p>如果你只用过一个 AI 编程助手，你可能觉得它足够好。但如果你用过两个以上，你会发现每个模型都有独特的优势和致命的弱点。Claude Code 在被采集长上下文时表现惊艳，但在改写已有代码时常出偏差。GPT 在做架构决策时思路开阔，但在严格执行既有模式上不够可靠。</p>
+
+  <p>问题在于：<strong>现有的工具都默认你只用一个模型</strong>。你的工作流、你的提示词、你的工具链——全绑定在一个供应商上。当更好的模型出现时，你被锁住了。当你需要的任务不适合当前模型时，你没有选择。</p>
+
+  <h3>Anthropic 封锁事件</h3>
+
+  <p>2025 年，Anthropic <a href="https://x.com/thdxr/status/2010149530486911014" target="_blank">封锁了 OpenCode</a>，原因是 OmO 的存在让 Claude Code 暴露了竞争力上的短板。这个事件不是一个孤立的技术争端——它揭示了一个根本性的行业问题：<strong>AI 供应商希望你被锁在他们的墙内</strong>。</p>
+
+  <p>这不是阴谋论。这是商业逻辑。如果每个供应商都让你只能用自己的模型，他们就能控制定价、控制功能、控制你的迁移成本。</p>
+
+  <h3>多模型编排是唯一出路</h3>
+
+  <p>未来的 AI 编程不是选一个赢家。每个月都有新模型发布，价格越来越低，能力越来越强。没有哪个供应商能永远领先。OmO 的立场很明确：<strong>不做任何一家供应商的附属品</strong>。你的工作流属于你自己，OmO 只是那个让你自由选择、自由切换的编排层。</p>
+
+  <blockquote>你不需要为 2 小时的活花 200 美元。未来的方向不是选一个赢家，而是编排所有赢家。</blockquote>
+</section>
+
+<section id="philosophy">
+  <h2>核心哲学</h2>
+
+  <p>OmO 的架构和功能设计都建立在四条基本原则之上。这些原则不是口号——它们是每个功能取舍背后的决策标准。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>人在回路 = 瓶颈</h4>
+      <p>如果你需要不断修正 AI 的半成品代码、逐步指导它完成任务、反复澄清需求——那不是人机协作，那是 AI 未能履行其职责。就像自动驾驶需要人类接管方向盘是系统故障一样，OmO 的目标是让 agent 在无需人类干预的情况下完成工作。输入 <code>ultrawork</code>，然后去做别的事。</p>
+    </div>
+    <div class="card">
+      <h4>代码不可区分</h4>
+      <p>Agent 写的代码应该与高级工程师写的代码无法区分。不是"AI 生成的代码需要清理"，不是"不错的起点"——而是真正的、最终的、可投入生产的代码。遵循已有模式、合理处理错误、不画蛇添足。OmO 的 Hashline 编辑工具和 Comment Checker 正是为此而设计。</p>
+    </div>
+    <div class="card">
+      <h4>最小化认知负担</h4>
+      <p>人类只需要说他们想要什么。其余全是 agent 的工作。两种模式实现这一点：Prometheus 模式（访谈式规划，帮你理清真正想要什么）和 Ultrawork 模式（你说方向，它做剩下的一切）。人类提供意图，系统提供结构与执行。不多不少。</p>
+    </div>
+    <div class="card">
+      <h4>可预测 · 持续 · 可委派</h4>
+      <p>理想的 agent 应该像编译器一样工作：Markdown 文档进去，工作代码出来。会话崩溃？<code>/start-work</code> 恢复。多天项目？上下文被保留。OmO 的 Todo Enforcer 确保 agent 不会中途闲置，Ralph Loop 确保任务不达 100% 不停止。像委派任务给一个可靠的队友一样委派给 agent。</p>
+    </div>
+  </div>
+</section>
+
+<section id="modes">
+  <h2>两种工作模式</h2>
+
+  <p>OmO 提供两种截然不同的工作模式，适应不同的任务类型和用户习惯。你可以把它们理解为"自动驾驶"和"对话式驾驶"——在不同的场景下各有优势。</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+    <div class="card" style="border-color:var(--cyan);">
+      <h4 style="color:var(--cyan)">Ultrawork 模式</h4>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:6px;">只管做，别问</p>
+      <p style="margin-top:10px;">你输入 <code>ultrawork</code> 或 <code>ulw</code>，OmO 就进入"只管做"模式。Sisyphus 主编排器接管会话，激活所有可用 agent，构建 todo 列表，然后像一个永不疲倦的工程师一样从头做到尾。不需要你批准每一步，不需要你回答问题，不需要你中途介入。</p>
+      <p>适合：明确的任务、已知的技术方案、大规模的代码重构。</p>
+    </div>
+    <div class="card" style="border-color:var(--orange);">
+      <h4 style="color:var(--orange)">Prometheus 模式</h4>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:6px;">先规划，再执行</p>
+      <p style="margin-top:10px;">输入 <code>/start-work</code> 调用 Prometheus。他不是直接开始写代码——而是像一位资深架构师一样采访你：你的目标是什么？约束条件是什么？有哪些潜在的陷阱？通过迭代提问理清需求后，他会输出一份结构化计划，经过 Metis 和 Momus 的审阅后，Sisyphus 再开始执行。</p>
+      <p>适合：复杂需求、不确定性高的任务、新项目的初始阶段。</p>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>维度</th><th>Ultrawork</th><th>Prometheus</th></tr>
+    <tr><td>触发方式</td><td>一个词 <code>ultrawork</code></td><td><code>/start-work</code> 命令</td></tr>
+    <tr><td>用户交互</td><td>零交互，不提问</td><td>访谈式，迭代提问</td></tr>
+    <tr><td>最佳场景</td><td>已知方案，大规模执行</td><td>模糊需求，复杂设计</td></tr>
+    <tr><td>输出</td><td>直接产出代码和文件</td><td>结构化计划后再执行</td></tr>
+    <tr><td>适用用户</td><td>知道自己要什么的</td><td>需要理清思路的</td></tr>
+  </table>
+</section>
+
+<section id="intentgate">
+  <h2>IntentGate</h2>
+
+  <p>传统 AI 编程工具有一个根本性的缺陷：<strong>它们把你说的话当作字面指令</strong>。你说"找到这个 bug"，它就去 grep 代码。你说"分析这段逻辑"，它就真的只分析不修改。但实际上，你说"找到这个 bug"的意思是"帮我修好它"，你说"分析这段逻辑"的意思是"看看有没有问题然后改掉"。</p>
+
+  <p>这就是字面理解的陷阱。人类在日常沟通中大量使用间接表达——我们期待对方理解我们的<strong>真实意图</strong>，而不是字面意思。</p>
+
+  <h3>IntentGate 如何工作</h3>
+
+  <p>IntentGate 是 OmO 的一条预处理管道，在用户输入到达任何 agent 之前先拦截分析。它不直接执行指令，而是先问一个问题：<strong>用户真正想要的是什么？</strong></p>
+
+  <p>具体来说，IntentGate 将用户意图分类为以下四种之一：</p>
+
+  <table>
+    <tr><th>类别</th><th>特征</th><th>典型输入</th></tr>
+    <tr><td><strong>ultrawork</strong></td><td>执行类任务，需要端到端完成</td><td>"把这个功能加上"、"重构这里"、"实现一个日志系统"</td></tr>
+    <tr><td><strong>search</strong></td><td>信息查找，不需要修改代码</td><td>"这个函数在哪里定义"、"帮我查一下 API"</td></tr>
+    <tr><td><strong>analyze</strong></td><td>代码审查或逻辑分析</td><td>"这段代码有什么问题"、"这个设计合理吗"</td></tr>
+    <tr><td><strong>team</strong></td><td>需要多 agent 协作的复杂任务</td><td>"并行调查这三个模块"、"做一个安全审计"</td></tr>
+  </table>
+
+  <p>分类完成后，系统会根据类别选择最合适的处理路径——包括是否激活多 agent 并行、是否限制为只读操作、是否进入 Ultrawork 模式。这确保了同一个 input 不会被错误地送入错误的执行管道。</p>
+
+  <div class="note">
+    <p><strong>注意：</strong>IntentGate 是 Ultimate 版的特性。Light 版（Codex CLI）只识别 <code>ultrawork</code>/<code>ulw</code> 关键字，不做完整意图分类。</p>
+  </div>
+</section>
+
+<section id="editions">
+  <h2>两版发行</h2>
+
+  <p>OmO 不是一款单一产品。它面向两个不同的 AI 编程环境，分别打包为两个版本。它们的核心理念相同，但功能范围和使用方式不同。</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+    <div class="card" style="border-color:var(--accent);">
+      <h4 style="color:var(--accent)">Ultimate Edition</h4>
+      <p style="color:var(--text-muted);font-size:13px;">omo for OpenCode</p>
+      <p style="margin-top:8px;">OmO 的完整形态。11 个专业 agent、54-61 个生命周期 hook、20-39 个工具、5 个内置 MCP 服务器、完整的 Team Mode、Hashline 编辑、AST-Grep、后台 agent 并行、Claude Code 完全兼容——一切。</p>
+      <ul style="margin-top:10px;">
+        <li>11 Agent + 54-61 Hook</li>
+        <li>5 内置 MCP + 20-39 工具</li>
+        <li>Team Mode（最多 8 并行成员）</li>
+        <li>Hashline 锚定编辑</li>
+        <li>Claude Code 完全兼容</li>
+        <li>Skill-Embedded MCP</li>
+      </ul>
+      <code style="display:block;margin-top:12px;">bunx oh-my-openagent install</code>
+    </div>
+    <div class="card" style="border-color:var(--purple);">
+      <h4 style="color:var(--purple)">Light Edition</h4>
+      <p style="color:var(--text-muted);font-size:13px;">omo for Codex CLI (lazycodex)</p>
+      <p style="margin-top:8px;">OmO 在 Codex CLI 中的便携实现。包含 8 个核心组件（rules, comment-checker, git-bash, LSP, ultrawork, ulw-loop, start-work-continuation, telemetry）和插件级 MCP。没有 agent 编排层，没有 team_* 工具——Codex 自身的 shell 会话处理这些工作。</p>
+      <ul style="margin-top:10px;">
+        <li>8 个核心组件</li>
+        <li>rules, comment-checker, LSP</li>
+        <li>ultrawork, ulw-loop</li>
+        <li>插件级 MCP 支持</li>
+        <li>无 Agent 编排层</li>
+      </ul>
+      <code style="display:block;margin-top:12px;">npx lazycodex-ai install</code>
+    </div>
+  </div>
+
+  <p>两者的关键区别不在于"谁更好"，而在于<strong>你用什么工具</strong>。如果你使用 OpenCode，Ultimate 版是你需要的一切。如果你使用 Codex CLI，Light 版提供了 OmO 核心体验的便携子集。你也可以通过 <code>bunx oh-my-openagent install --platform=both</code> 同时安装两个版本。</p>
+</section>
+
+<section id="quickstart">
+  <h2>快速开始</h2>
+
+  <p>安装 OmO 不需要复杂的配置流程。一行命令，然后一个词开始工作。</p>
+
+  <pre><code># Ultimate Edition（OpenCode 用户）
+bunx oh-my-openagent install
+
+# Light Edition（Codex CLI 用户）
+npx lazycodex-ai install</code></pre>
+
+  <p>安装完成后，在 OpenCode 或 Codex CLI 中输入以下内容开始：</p>
+
+  <pre><code># 一句话即可
+ultrawork 帮我把这个项目的测试覆盖率达到 80% 以上
+
+# 或简写
+ulw 重构用户认证模块，改用 JWT</code></pre>
+
+  <table>
+    <tr><th>命令</th><th>用途</th></tr>
+    <tr><td><code>bunx oh-my-openagent install</code></td><td>安装 Ultimate 版（交互式向导）</td></tr>
+    <tr><td><code>npx lazycodex-ai install</code></td><td>安装 Light 版（Codex CLI）</td></tr>
+    <tr><td><code>bunx oh-my-opencode doctor</code></td><td>运行健康诊断（4 大类检查）</td></tr>
+    <tr><td><code>ultrawork</code> / <code>ulw</code></td><td>进入端到端执行模式</td></tr>
+    <tr><td><code>/start-work</code></td><td>启动 Prometheus 规划-执行流程</td></tr>
+    <tr><td><code>/ulw-loop</code></td><td>启动持续执行循环</td></tr>
+  </table>
+
+  <p>更多资源：</p>
+  <ul>
+    <li><a href="https://github.com/code-yeongyu/oh-my-openagent" target="_blank">GitHub 仓库</a> — 源代码与问题跟踪</li>
+    <li><a href="https://omo.dev" target="_blank">官方网站</a> — 项目首页</li>
+    <li><a href="https://discord.gg/PUwSMR9XNk" target="_blank">Discord 社区</a> — 与贡献者和其他用户交流</li>
+    <li><a href="https://omo.vibetip.help/docs" target="_blank">文档站点</a> — 完整使用指南</li>
+  </ul>
+</section>
+
+<div style="padding:24px 64px;max-width:960px;">
+  <div class="next-section">
+    <span></span>
+    <a class="next" href="level-2-agents.html">下一层：Agent 系统 →</a>
+  </div>
+</div>
+
+</main>
+
+</body>
+</html>

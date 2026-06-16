@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oh My OpenAgent — 第四层 · 架构深度解析</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">由浅入深 · 第四层</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul class="nav-back">
+      <li><a href="guide.html">← 返回导读</a></li>
+      <li><a href="level-1-basics.html">← 第一层</a></li>
+      <li><a href="level-2-agents.html">← 第二层</a></li>
+      <li><a href="level-3-hooks.html">← 第三层</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">深度阅读</div>
+    <ul>
+      <li><a href="level-1-basics.html">第一层 · 基本概念</a></li>
+      <li><a href="level-2-agents.html">第二层 · Agent 系统</a></li>
+      <li><a href="level-2.5-model-matching.html">第二层半 · 模型匹配</a></li>
+      <li><a href="level-3-hooks.html">第三层 · Hook 与工具</a></li>
+      <li><a class="current" href="level-4-architecture.html">第四层 · 架构深度</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#package-layers">分层总览</a></li>
+      <li><a href="#core-packages">19 个 Core 包</a></li>
+      <li><a href="#adapter-layer">适配器层</a></li>
+      <li><a href="#init-flow">初始化流程</a></li>
+      <li><a href="#refactor-status">重构状态</a></li>
+      <li><a href="#invariants">架构不变量</a></li>
+      <li><a href="#merge-policy">合并策略</a></li>
+      <li><a href="#ci-cd">CI/CD</a></li>
+      <li><a href="#conventions">约定</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="package-layers">
+  <div class="breadcrumb">
+    <a href="guide.html">导读</a> → <a href="level-1-basics.html">第一层</a> → <a href="level-2-agents.html">第二层</a> → <a href="level-3-hooks.html">第三层</a> → <span>第四层：架构深度解析</span>
+  </div>
+
+  <h1>架构深度解析</h1>
+  <p style="font-size:18px;color:var(--text);">38 个 monorepo 包按严格层级组织。<strong>依赖规则：DAG 只能向下流动。</strong>上层依赖下层，下层不知道上层存在。</p>
+
+  <h2>分层总览</h2>
+
+  <div class="layer-diagram">
+    <div class="layer layer-web">
+      <div class="name" style="color:var(--cyan)">Web — 营销网站</div>
+      <div class="desc"><code>packages/web/</code> — Next.js 15 + Cloudflare Workers，独立应用，不使用路径别名外的 monorepo 包。自有 <code>bun.lock</code> 和 tsconfig。</div>
+    </div>
+
+    <div class="layer layer-platform">
+      <div class="name" style="color:var(--purple)">Platform — 平台二进制</div>
+      <div class="desc">11 平台二进制 — <code>bun compile</code> 编译产物 (darwin/linux/windows × arch × variant)。部署产物，不被任何包导入。包名模式：<code>oh-my-opencode-&lt;os&gt;-&lt;arch&gt;[-variant]</code>。由 <code>publish-platform.yml</code> 生成。</div>
+    </div>
+
+    <div class="layer layer-adapter">
+      <div class="name" style="color:var(--accent)">Adapters — 适配器层 (2 包)</div>
+      <div class="desc"><code>omo-opencode/</code> + <code>omo-codex/</code> — 针对各 harness 的薄包装。导入 Core，包装成 harness API，导出。这是唯一知道 OpenCode 或 Codex 具体 API 的层。</div>
+    </div>
+
+    <div class="layer layer-skills">
+      <div class="name" style="color:var(--green)">Skills — 技能声明 (1 包)</div>
+      <div class="desc"><code>shared-skills/</code> — SKILL.md 静态声明文件。Markdown 被 agent 消费，不含运行时代码。跨 harness (OpenCode + Codex) 共享。</div>
+    </div>
+
+    <div class="layer layer-mcp">
+      <div class="name" style="color:var(--orange)">MCP — 工具服务器 (4 包)</div>
+      <div class="desc"><code>lsp-tools-mcp</code>, <code>ast-grep-mcp</code>, <code>git-bash-mcp</code>, <code>lsp-daemon</code> — stdio 进程边界隔离。host-agnostic，不依赖任何 harness。LSP 包消费 <code>lsp-core</code> + <code>mcp-stdio-core</code>。</div>
+    </div>
+
+    <div class="layer layer-core">
+      <div class="name" style="color:var(--pink)">Core — 纯逻辑核心 (19 包)</div>
+      <div class="desc">纯 TypeScript 逻辑。无 harness 依赖。可隔离测试。所有层的基础。</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <p><strong>依赖方向：</strong> Web 和 Platform 是叶子节点。Adapter 依赖 Core、MCP、Skills。没有包依赖 Adapter。MCP 依赖 Core。Skills 不依赖任何代码包。Core 是最底层，不依赖任何其他包。</p>
+  </div>
+</section>
+
+<section id="core-packages">
+  <h2>Core 层：19 个纯逻辑包</h2>
+  <p>每个 Core 包都是纯 TypeScript，无 harness 依赖，可隔离测试。适配器通过 workspace 依赖消费这些包。</p>
+
+  <table>
+    <tr><th>包名 (packages/)</th><th>用途</th></tr>
+    <tr>
+      <td><strong>utils</strong></td>
+      <td>深层合并、snake_case 转换、frontmatter 解析等跨包通用工具。</td>
+    </tr>
+    <tr>
+      <td><strong>model-core</strong></td>
+      <td>模型解析管线：provider 缓存 (ProviderCache DI)、模型能力匹配、模型需求解析。</td>
+    </tr>
+    <tr>
+      <td><strong>prompts-core</strong></td>
+      <td>harness-neutral 的 markdown prompt 加载器。模式路由 (ultrawork/search/analyze/team)，不依赖任何 harness。</td>
+    </tr>
+    <tr>
+      <td><strong>rules-engine</strong></td>
+      <td>规则发现与匹配引擎。扫描 .omo/rules/、.claude/rules/ 等目录，按条件注入规则。原名 rules-core。</td>
+    </tr>
+    <tr>
+      <td><strong>agents-md-core</strong></td>
+      <td>AGENTS.md walk-up 发现与上下文注入。从工作目录向上直至 $HOME，收集并聚合 AGENTS.md 内容。</td>
+    </tr>
+    <tr>
+      <td><strong>ast-grep-core</strong></td>
+      <td>ast-grep 类型定义、模式提示、runner 核心。不包含 CLI 或 MCP 包装。</td>
+    </tr>
+    <tr>
+      <td><strong>comment-checker-core</strong></td>
+      <td>apply-patch 解析器与二进制 runner。检测 AI slop 注释模式并拒绝。</td>
+    </tr>
+    <tr>
+      <td><strong>hashline-core</strong></td>
+      <td>Hashline 编辑原语：LINE#ID 内容哈希生成、diff 助手、哈希验证。灵感来自 oh-my-pi。</td>
+    </tr>
+    <tr>
+      <td><strong>boulder-state</strong></td>
+      <td>工作追踪状态机：boulder 创建/更新/完成，分体存储 (boulder-state 数据 + metadata 元数据)。</td>
+    </tr>
+    <tr>
+      <td><strong>telemetry-core</strong></td>
+      <td>harness-neutral 的遥测：PostHog 包装器，DAU/WAU/MAU 追踪，SHA256 hashed 安装 ID。</td>
+    </tr>
+    <tr>
+      <td><strong>lsp-core</strong></td>
+      <td>harness-neutral 的 LSP 引擎：请求上下文、工具定义、语言服务器管理。被 lsp-tools-mcp 和 lsp-daemon 消费。</td>
+    </tr>
+    <tr>
+      <td><strong>mcp-stdio-core</strong></td>
+      <td>JSON-RPC stdio 帧协议：dispatch 原语、消息序列化、进程生命周期管理。</td>
+    </tr>
+    <tr>
+      <td><strong>tmux-core</strong></td>
+      <td>harness-neutral 的 tmux 操作：会话/窗格/布局/runner。Team Mode 可视化依赖此包。</td>
+    </tr>
+    <tr>
+      <td><strong>claude-code-compat-core</strong></td>
+      <td>Claude Code 兼容加载器：plugins、MCPs、commands、agents 的兼容适配，不含 harness 特定胶水。</td>
+    </tr>
+    <tr>
+      <td><strong>skills-loader-core</strong></td>
+      <td>Skill 加载：builtin skill、runtime skill、skill 匹配与发现。</td>
+    </tr>
+    <tr>
+      <td><strong>mcp-client-core</strong></td>
+      <td>MCP 客户端生命周期：skill-embedded MCP 管理器、OAuth 2.0 + PKCE + DCR 流程。</td>
+    </tr>
+    <tr>
+      <td><strong>openclaw-core</strong></td>
+      <td>OpenClaw 网关：reply-listener 守护进程、会话注册表、tmux 注入。</td>
+    </tr>
+    <tr>
+      <td><strong>team-core</strong></td>
+      <td>Team Mode 核心：registry、mailbox、tasklist、state machine、worktree、tmux 布局。不包含 OpenCode 工具注册。</td>
+    </tr>
+    <tr>
+      <td><strong>delegate-core</strong></td>
+      <td>委派任务选择：category 匹配、retry 原语、任务优先级排序。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="adapter-layer">
+  <h2>适配器层：两版发行</h2>
+
+  <h3>Ultimate Edition — omo-opencode (OpenCode 插件)</h3>
+  <table>
+    <tr><th>维度</th><th>详情</th></tr>
+    <tr><td>构建入口</td><td><code>packages/omo-opencode/src/index.ts</code> — 薄包装，委托给 <code>createPluginModule()</code></td></tr>
+    <tr><td>Agent</td><td>11 个 (Sisyphus, Hephaestus, Oracle, Librarian, Explore, Atlas, Prometheus, Metis, Momus, Multimodal-Looker, Sisyphus-Junior)</td></tr>
+    <tr><td>Hook</td><td>54 基础 + 7 Team Mode = 61。5 层组合：Session(23) + ToolGuard(17) + Transform(4) + Continuation(7) + Skill(2)</td></tr>
+    <tr><td>工具</td><td>20 常驻 + 19 条件 (team_* +12, task_* +4, hashline_edit, interactive_bash, look_at)</td></tr>
+    <tr><td>内置 MCP</td><td>5 个：3 远程 HTTP (websearch/context7/grep_app) + 2 本地 stdio (lsp/ast_grep)</td></tr>
+    <tr><td>Feature 模块</td><td>22 个 (team-mode, background-agent, skill-mcp-manager, hashline-edit, boulder-state, openclaw, ...)</td></tr>
+    <tr><td>初始化阶段</td><td>14 阶段管道 (见下方)</td></tr>
+  </table>
+
+  <h3>Light Edition — omo-codex (Codex CLI 插件)</h3>
+  <table>
+    <tr><th>维度</th><th>详情</th></tr>
+    <tr><td>发布身份</td><td>Codex 看到 marketplace <code>sisyphuslabs</code>，插件 <code>omo</code>，启用为 <code>omo@sisyphuslabs</code>。npm 包 <code>lazycodex-ai</code>。</td></tr>
+    <tr><td>组件</td><td>8 个：rules, comment-checker, git-bash, lsp, ultrawork, ulw-loop, start-work-continuation, telemetry。无 agent 编排，无 team_* 工具。</td></tr>
+    <tr><td>安装</td><td><code>npx lazycodex-ai install</code>。写入 <code>~/.codex/plugins/cache/sisyphuslabs/omo/&lt;version&gt;/</code>，更新 <code>~/.codex/config.toml</code>。</td></tr>
+    <tr><td>分发</td><td>npm 包 <code>lazycodex-ai</code> → Codex marketplace 仓库 <code>code-yeongyu/lazycodex</code>。每个 stable release 自动同步 marketplace。</td></tr>
+    <tr><td>Hook</td><td>绑定到 Codex 事件：SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, Stop, SubagentStop。</td></tr>
+  </table>
+
+  <div class="note">
+    <p><strong>关键区别：</strong> Ultimate 是完整的 agent 编排系统。Light 是可在 Codex 插件系统内运行的组件集合。同一个产品，两种交付形式。</p>
+  </div>
+</section>
+
+<section id="init-flow">
+  <h2>初始化流程：14 阶段管道</h2>
+  <p><code>createPluginModule()</code> 按顺序执行 14 个阶段，每个阶段都可能失败并提前退出。下面是完整流程：</p>
+
+  <table>
+    <tr><th>#</th><th>阶段</th><th>说明</th></tr>
+    <tr>
+      <td>1</td>
+      <td><code>installAgentSortShim()</code></td>
+      <td>修补 <code>Array.prototype.toSorted</code>/<code>.sort</code>，当数组包含 ≥2 个核心 agent 时强制规范排序 (Sisyphus→Hephaestus→Prometheus→Atlas)。</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><code>initConfigContext()</code></td>
+      <td>检测 opencode-vs-openagent 布局标志，处理包名迁移兼容。</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><code>logLegacyPluginStartupWarning()</code></td>
+      <td>如果通过旧条目 <code>oh-my-opencode</code> 加载，记录弃用警告。</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><code>migrateLegacyWorkspaceDirectory()</code></td>
+      <td>首次加载时将 <code>.sisyphus/</code> 状态复制到 <code>.omo/</code>。</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><code>detectDuplicateOmoPlugin()</code></td>
+      <td>检测到重复的 omo/openagent 插件时提前退出，防止双重加载。</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><code>detectExternalSkillPlugin()</code></td>
+      <td>检测冲突的外部 skill 插件并发出警告。</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><code>injectServerAuthIntoClient()</code></td>
+      <td>将认证头注入共享 SDK 客户端，使内部请求可携带服务器端 auth。</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><code>loadPluginConfig()</code></td>
+      <td>6 阶段配置管道：JSONC 解析 → 用户/项目配置合并 → Zod v4 验证 → 迁移旧键。越近的配置优先级越高。</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><code>selectRuntimeSecuritySkills()</code> + <code>createRuntimeSkillSourceServer()</code></td>
+      <td>选择运行时安全技能，创建按需 skill source server。</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td><code>initI18n()</code></td>
+      <td>加载本地化字符串 (<code>packages/omo-opencode/src/locales/</code>)。</td>
+    </tr>
+    <tr>
+      <td>11</td>
+      <td><code>setAgentSortOrder()</code></td>
+      <td>应用用户配置的 <code>agent_order</code>，覆盖默认排序。</td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td><code>initializeOpenClaw()</code></td>
+      <td>如果存在 openclaw 配置：启动双向 Discord/Telegram/HTTP/shell 网关。</td>
+    </tr>
+    <tr>
+      <td>13</td>
+      <td><code>checkTeamModeDependencies()</code></td>
+      <td>如果 <code>team_mode.enabled</code>：检查 tmux 等依赖。失败则降级为 disabled-skills 警告。</td>
+    </tr>
+    <tr>
+      <td>14</td>
+      <td><code>startTmuxCheck()</code> → ...</td>
+      <td>最后的批量创建：tmux 检查 → createManagers() → createTools() → createHooks() → createPluginInterface() → createPluginDispose()。全部完成后插件就绪。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="refactor-status">
+  <h2>重构状态</h2>
+
+  <div class="highlight-box">
+    <p><strong>当前阶段：Package Layering Refactor</strong> — 将 packages/ 重构为严格分层 (Core → MCP → Skills → Adapters → Platform → Web)，使同一套逻辑可跨 harness 重用，消除三个仓库 (omo、pi-extensions、codex-plugins) 之间的代码重复。</p>
+  </div>
+
+  <h3>已完成</h3>
+  <ul>
+    <li>19 个 Core 包已从原位置提取到 <code>packages/</code> 下</li>
+    <li><code>omo</code> (OpenCode 适配器) 通过 workspace 依赖消费这些 Core 包，适配器 shim 留在原 <code>packages/omo-opencode/src/</code> 位置作为稳定锚点</li>
+    <li><code>lsp-tools-mcp</code> 和 <code>lsp-daemon</code> 已迁移为消费 <code>lsp-core</code> + <code>mcp-stdio-core</code></li>
+    <li>分层已达成：Core (19 纯 TS 包) → MCP 包 → Adapters → Platform 二进制</li>
+  </ul>
+
+  <h3>下一阶段</h3>
+  <ul>
+    <li><code>pi-extensions</code> 和 <code>codex-plugins</code> 尚未迁移到消费 Core 层。该迁移是下一阶段。</li>
+  </ul>
+
+  <h3>未来方向 (探索性)</h3>
+  <ul>
+    <li>通过共享 Core 层支持多个 harness：Claude Code、Codex、Pi、Amp、Droid 等。</li>
+    <li>Pi Engine DI 抽象已推迟。可在适配器迁移完成后重新评估。</li>
+    <li>不追求"大一统"插件接口，不追求人类可读的目录结构优先于 agent 循环性能。</li>
+  </ul>
+
+  <blockquote>原则：当有疑问时，选择对执行工作的 agent 需要最少推理的表示形式。如果这让目录对人类显得混乱，那么这个目录对人类是错的，对 agent 是对的。</blockquote>
+</section>
+
+<section id="invariants">
+  <h2>架构不变量</h2>
+  <p>以下规则<strong>不得违反</strong>。它们被测试和 lint 规则强制，违反会导致构建失败或运行时错误。</p>
+
+  <table>
+    <tr><th>不变量</th><th>规则</th><th>实施</th></tr>
+    <tr>
+      <td><strong>规范 agent 排序</strong></td>
+      <td>Sisyphus → Hephaestus → Prometheus → Atlas。当数组包含 ≥2 个核心 agent 时强制此顺序。</td>
+      <td><code>installAgentSortShim()</code> 修补 Array.prototype。order 字段注入。</td>
+    </tr>
+    <tr>
+      <td><strong>Hashline edit+read 配对</strong></td>
+      <td>每次 <code>Read</code> 工具输出必须带 LINE#ID 内容哈希。edit 在应用前验证哈希。哈希不匹配 → 拒绝。</td>
+      <td>hashline edit 工具在写入前检查。stale hash 直接拒绝。</td>
+    </tr>
+    <tr>
+      <td><strong>Prompt-async gate</strong></td>
+      <td><code>session.prompt</code> / <code>session.promptAsync</code> 是危险的 — OpenCode 在 prompt 被持久接受前就返回。所有内部消息注入<strong>必须</strong>通过 <code>prompt-async-gate.ts</code>。</td>
+      <td>静态审计测试 (prompt-async-route-audit.test.ts) 扫描整个代码库，发现 gate 外的原始 prompt 调用则失败。</td>
+    </tr>
+    <tr>
+      <td><strong>OpenClaw 双向</strong></td>
+      <td>出站 dispatcher 在会话事件时触发。入站守护进程轮询 Discord/Telegram，并将回复 send-keys 到被追踪的 tmux 窗格。</td>
+      <td>openclaw-core 会话注册表 + tmux 窗格追踪。</td>
+    </tr>
+    <tr>
+      <td><strong>按会话 MCP 隔离</strong></td>
+      <td>第三级 MCP 客户端以 <code>${sessionID}:${skillName}:${serverName}</code> 为键。同一 skill 在两个会话中不共享状态。</td>
+      <td>per-session MCP manager keying。</td>
+    </tr>
+    <tr>
+      <td><strong>两个 fallback 系统独立</strong></td>
+      <td><code>model-fallback</code> (主动，chat.params，硬编码链) 与 <code>runtime-fallback</code> (响应式，session.error，按 category/agent 配置) 独立运行，互不集成。</td>
+      <td>两个模块无交叉导入。独立触发路径。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="merge-policy">
+  <h2>PR 合并策略</h2>
+
+  <div class="highlight-box">
+    <p><strong>必须使用 merge commit。</strong>命令：<code>gh pr merge &lt;num&gt; --merge --delete-branch</code>。<strong>绝不</strong>使用 squash-merge 或 rebase-merge，即使通用工作流、skill 或 GitHub 默认建议如此。此仓库级规则覆盖所有其他建议。</p>
+  </div>
+
+  <table>
+    <tr><th>规则</th><th>说明</th></tr>
+    <tr><td>目标分支</td><td>所有 PR 必须 target <code>dev</code>。target <code>master</code> 的 PR 被硬阻止。</td></tr>
+    <tr><td>合并方式</td><td><code>--merge</code> 仅。创建 merge commit，不 squash，不 rebase。</td></tr>
+    <tr><td>合并前</td><td>CI 通过 (tests + typecheck + build)，review-work 审查通过，Cubic 通过 (除非配额耗尽)。</td></tr>
+    <tr><td>工作流</td><td>使用 <code>work-with-pr</code> skill：隔离的 git worktree → 实现 + QA → PR → 验证循环 → merge。</td></tr>
+  </table>
+</section>
+
+<section id="ci-cd">
+  <h2>CI/CD 工作流</h2>
+
+  <table>
+    <tr><th>工作流</th><th>触发</th><th>用途</th></tr>
+    <tr>
+      <td><code>ci.yml</code></td>
+      <td>push/PR 到 master/dev</td>
+      <td>测试、类型检查、构建、codex 兼容性 (ubuntu/macos/windows)。master push 时自动提交 schema。dev push 时创建 draft "next" release。</td>
+    </tr>
+    <tr>
+      <td><code>publish.yml</code></td>
+      <td>手动 dispatch</td>
+      <td>双 npm publish (oh-my-opencode + oh-my-openagent) + lazycodex-ai npm 包 + 自动 Codex marketplace 同步 + 平台二进制 + GitHub release + merge 到 master。</td>
+    </tr>
+    <tr>
+      <td><code>publish-platform.yml</code></td>
+      <td>由 publish.yml 调用</td>
+      <td>通过 <code>bun compile</code> 构建 11 平台二进制 (darwin/linux/windows)。</td>
+    </tr>
+    <tr>
+      <td><code>sisyphus-agent.yml</code></td>
+      <td>@mention 或手动 dispatch</td>
+      <td>AI agent 处理 issues 和 PRs。</td>
+    </tr>
+    <tr>
+      <td><code>refresh-model-capabilities.yml</code></td>
+      <td>每周 cron / dispatch</td>
+      <td>从 models.dev API 刷新模型能力缓存。</td>
+    </tr>
+    <tr>
+      <td><code>cla.yml</code></td>
+      <td>issue_comment / PR</td>
+      <td>CLA 助手，管理 contributor license agreement 签名。</td>
+    </tr>
+    <tr>
+      <td><code>lint-workflows.yml</code></td>
+      <td>push/PR 涉及 .github/workflows/**</td>
+      <td>actionlint 检查，shellcheck 已禁用。</td>
+    </tr>
+    <tr>
+      <td><code>web-ci.yml</code></td>
+      <td>push/PR 涉及 packages/web/**, docs/**</td>
+      <td>格式检查、lint、类型检查、next build、opennextjs-cloudflare build。另有 <code>web-deploy.yml</code> 部署到 Cloudflare Workers。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="conventions">
+  <h2>关键约定</h2>
+
+  <table>
+    <tr><th>类别</th><th>约定</th></tr>
+    <tr>
+      <td><strong>运行时</strong></td>
+      <td>仅 Bun (CI 中 1.3.12+)。永不使用 npm/yarn/pnpm 运行项目。例外：<code>lsp-tools-mcp</code> 和 <code>lsp-daemon</code> 是 Node-targeted，使用 npm + vitest/biome。</td>
+    </tr>
+    <tr>
+      <td><strong>TypeScript</strong></td>
+      <td>strict mode、ESNext、bundler moduleResolution、<code>bun-types</code>。永不使用 <code>@types/node</code>。永不使用 <code>as any</code>、<code>@ts-ignore</code>、<code>@ts-expect-error</code>。</td>
+    </tr>
+    <tr>
+      <td><strong>测试</strong></td>
+      <td>Bun test (<code>bun:test</code>)，与源文件并列的 <code>*.test.ts</code>。given/when/then 风格 — 嵌套 <code>describe</code> 使用 <code>#given</code>/<code>#when</code>/<code>#then</code> 前缀，或行内注释。永不使用 Arrange-Act-Assert。</td>
+    </tr>
+    <tr>
+      <td><strong>工厂模式</strong></td>
+      <td>所有工具、hook、agent 使用 <code>createXXX()</code> 工厂函数。</td>
+    </tr>
+    <tr>
+      <td><strong>文件命名</strong></td>
+      <td>所有文件和目录使用 kebab-case。</td>
+    </tr>
+    <tr>
+      <td><strong>模块结构</strong></td>
+      <td><code>index.ts</code> barrel 导出。禁止 catch-all 文件 (<code>utils.ts</code>、<code>helpers.ts</code>、<code>service.ts</code>)。每文件 200 行软限制。</td>
+    </tr>
+    <tr>
+      <td><strong>导入</strong></td>
+      <td>模块内使用相对导入，跨模块使用 barrel 导入。packages/src/ 内部禁止路径别名 — 永不使用 <code>@/</code>。例外：<code>packages/web/</code> 使用 <code>@/*</code> (Next.js 约定)。</td>
+    </tr>
+    <tr>
+      <td><strong>配置格式</strong></td>
+      <td>JSONC (注释 + 尾逗号)、Zod v4 验证、snake_case 键名。</td>
+    </tr>
+    <tr>
+      <td><strong>空 catch</strong></td>
+      <td>禁止空 catch 块 <code>catch(e) {}</code>。</td>
+    </tr>
+    <tr>
+      <td><strong>日志</strong></td>
+      <td>写入 OS 临时目录下的 <code>oh-my-opencode.log</code>。50 MB 轮转，保留 <code>.1</code> 和 <code>.2</code> 备份。</td>
+    </tr>
+    <tr>
+      <td><strong>后台任务</strong></td>
+      <td>每个 <code>${providerID}/${modelID}</code> 键 5 并发 (可配置)。队列满时 FIFO。</td>
+    </tr>
+  </table>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="level-3-hooks.html">← 上一层：Hook 与工具</a>
+  <span></span>
+</div>
+
+</main>
+</body>
+</html>

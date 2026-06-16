@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第二层 · Agent 系统 — Oh My OpenAgent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">由浅入深 · 第二层</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="guide.html">← 返回导读</a></li>
+      <li class="nav-back"><a href="level-1-basics.html">← 第一层</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">深度阅读</div>
+    <ul>
+      <li><a href="level-1-basics.html">第一层 · 基本概念</a></li>
+      <li><a class="current" href="level-2-agents.html">第二层 · Agent 系统</a></li>
+      <li><a href="level-2.5-model-matching.html">第二层半 · 模型匹配</a></li>
+      <li><a href="level-3-hooks.html">第三层 · Hook 与工具</a></li>
+      <li><a href="level-4-architecture.html">第四层 · 架构深度</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#core-agents">核心 Agent</a></li>
+      <li><a href="#planning-agents">规划 Agent</a></li>
+      <li><a href="#orchestration-agents">编排 Agent</a></li>
+      <li><a href="#model-recommendations">模型推荐</a></li>
+      <li><a href="#category-system">Category 系统</a></li>
+      <li><a href="#background-agents">后台 Agent</a></li>
+      <li><a href="#team-mode">Team Mode</a></li>
+      <li><a href="#agent-ordering">Agent 排序</a></li>
+      <li><a href="#orchestration-system">编排系统</a></li>
+      <li><a href="#team-mode-expanded">Team Mode 详解</a></li>
+      <li><a href="#usage-patterns">使用模式</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="core-agents">
+  <div class="breadcrumb"><a href="guide.html">导读</a> → <a href="level-1-basics.html">第一层</a> → <span>第二层：Agent 系统</span></div>
+  <h1>第二层 · Agent 系统</h1>
+  <p>OmO 提供 11 个专业 Agent。每个都有独特的专长、优化的模型选择和工具权限。Agent 之间通过 <strong>category 分类系统</strong>自动匹配最优模型，无需人工干预。</p>
+
+  <h2 id="core-agents-detail">核心 Agent</h2>
+  <p>项目最核心的 6 个 Agent，构成系统的执行骨架。</p>
+  <table>
+    <tr><th>Agent</th><th>推荐模型</th><th>特性</th></tr>
+    <tr>
+      <td><strong>Sisyphus</strong></td>
+      <td>Claude Opus 4.7 / Kimi K2.6 / GLM 5.1</td>
+      <td><strong>主编排器。</strong>Todo 驱动工作流，规划并委派给专家 agent，激进并行执行。32k 思考预算 (thinking budget)。不半途而废。处理所有顶层用户交互。</td>
+    </tr>
+    <tr>
+      <td><strong>Hephaestus</strong></td>
+      <td>GPT-5.5</td>
+      <td><strong>自主深度工作者。</strong>给他目标 (goal)，而非配方 (recipe)。探索代码库、研究模式、端到端执行。灵感来自 AmpCode 的 deep 模式。不写无意义的样板代码。</td>
+    </tr>
+    <tr>
+      <td><strong>Oracle</strong></td>
+      <td>GPT-5.5 / Gemini 3.1 Pro / Claude Opus 4.7</td>
+      <td><strong>只读高智商顾问。</strong>架构决策、代码审查、复杂调试分析。仅限 read 工具和搜索 MCP。不写代码、不编辑文件、不委派任务。</td>
+    </tr>
+    <tr>
+      <td><strong>Librarian</strong></td>
+      <td>GPT-5.4 Mini / Qwen / MiniMax</td>
+      <td><strong>多仓库分析。</strong>文档搜索、开源实现示例查找、深度代码库理解。基于证据回答，引用具体来源。只读。</td>
+    </tr>
+    <tr>
+      <td><strong>Explore</strong></td>
+      <td>GPT-5.4 Mini / Qwen / MiniMax</td>
+      <td><strong>快速代码库探索。</strong>上下文感知 grep 和 glob。速度优先于深度分析。只读，不编辑文件。</td>
+    </tr>
+    <tr>
+      <td><strong>Multimodal Looker</strong></td>
+      <td>GPT-5.5 / Kimi K2.6 / GLM 4.6v</td>
+      <td><strong>视觉内容专家。</strong>分析 PDF、图片、截图、图表和 UI 设计稿。仅限 read 和 look_at 工具，不修改任何文件。</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p>Sisyphus 是唯一拥有完整工具权限和委派能力的 Agent。所有其他 Agent 通过 Sisyphus 的任务委派被调用——要么直接指定 agent 类型，要么通过 category 间接路由。</p>
+  </div>
+</section>
+
+<section id="planning-agents">
+  <h2>规划 Agent</h2>
+  <p>三阶段规划管道：初始分析 (Metis) → 详细规划 (Prometheus) → 审查验证 (Momus)。</p>
+  <table>
+    <tr><th>Agent</th><th>推荐模型</th><th>特性</th></tr>
+    <tr>
+      <td><strong>Prometheus</strong></td>
+      <td>Claude Opus 4.7 / GPT-5.5</td>
+      <td><strong>战略规划师。</strong>访谈模式 (interview mode) — 像真正的工程师一样，在碰代码之前通过迭代提问识别范围、歧义和约束，构建详细可执行计划。</td>
+    </tr>
+    <tr>
+      <td><strong>Metis</strong></td>
+      <td>Claude Sonnet 4.6 / Claude Opus 4.7</td>
+      <td><strong>规划顾问。</strong>在计划最终确定前分析隐藏意图、模糊性和 AI 失败模式。提供元级反馈，但不做最终决策。</td>
+    </tr>
+    <tr>
+      <td><strong>Momus</strong></td>
+      <td>GPT-5.5 / Claude Opus 4.7</td>
+      <td><strong>计划审查官。</strong>针对清晰度、可验证性和完整性标准验证计划。确保每个计划项都有可测量的成功标准。只读。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="orchestration-agents">
+  <h2>编排 Agent</h2>
+  <p>将计划转化为执行的两个抽象层。</p>
+  <table>
+    <tr><th>Agent</th><th>推荐模型</th><th>特性</th></tr>
+    <tr>
+      <td><strong>Atlas</strong></td>
+      <td>Claude Sonnet 4.6 / Kimi K2.6</td>
+      <td><strong>Todo 编排器。</strong>系统执行计划任务，管理 todo 项并协调工作。通过 <code>/start-work</code> 命令激活，从 Prometheus 计划中加载 todo 列表并逐个推进。</td>
+    </tr>
+    <tr>
+      <td><strong>Sisyphus-Junior</strong></td>
+      <td>按 category 自动选择</td>
+      <td><strong>Category 衍生执行器。</strong>当任务以 category 而非 agent 类型委派时，由 Sisyphus-Junior 实例化并承载该 category 对应的模型。模型从不固定，完全由 category 系统自动决定。</td>
+    </tr>
+  </table>
+</section>
+
+<section id="model-recommendations">
+  <h2>模型推荐与回退链</h2>
+  <p>每个 Agent 都有推荐的模型和回退链。当首选模型不可用 (速率限制、故障) 时，系统自动沿链回退。</p>
+  <table>
+    <tr><th>Agent</th><th>首选模型</th><th>思考预算</th><th>回退链</th></tr>
+    <tr>
+      <td>Sisyphus</td>
+      <td>Claude Opus 4.7</td>
+      <td>32k tokens</td>
+      <td>→ kimi-k2.6 → k2p5 → k2.5 → gpt-5.5 medium → glm-5 → big-pickle</td>
+    </tr>
+    <tr>
+      <td>Hephaestus</td>
+      <td>GPT-5.5</td>
+      <td>16k tokens</td>
+      <td>→ claude-opus-4-7 → kimi-k2.6 → glm-5.1 → sonnet-4.6</td>
+    </tr>
+    <tr>
+      <td>Oracle</td>
+      <td>GPT-5.5</td>
+      <td>24k tokens</td>
+      <td>→ gemini-3.1-pro → claude-opus-4-7 → glm-5.1</td>
+    </tr>
+    <tr>
+      <td>Librarian</td>
+      <td>GPT-5.4 Mini</td>
+      <td>8k tokens</td>
+      <td>→ qwen → minimax → gemini-flash → sonnet-4.6</td>
+    </tr>
+    <tr>
+      <td>Explore</td>
+      <td>GPT-5.4 Mini</td>
+      <td>4k tokens</td>
+      <td>→ qwen → minimax → sonnet-4.6 → haiku</td>
+    </tr>
+    <tr>
+      <td>Multimodal Looker</td>
+      <td>GPT-5.5</td>
+      <td>4k tokens</td>
+      <td>→ kimi-k2.6 → glm-4.6v → gemini-pro-vision</td>
+    </tr>
+    <tr>
+      <td>Prometheus</td>
+      <td>Claude Opus 4.7</td>
+      <td>32k tokens</td>
+      <td>→ gpt-5.5 → kimi-k2.6 → glm-5.1 → sonnet-4.6</td>
+    </tr>
+    <tr>
+      <td>Metis</td>
+      <td>Claude Sonnet 4.6</td>
+      <td>16k tokens</td>
+      <td>→ claude-opus-4-7 → gpt-5.5 medium → kimi-k2.5</td>
+    </tr>
+    <tr>
+      <td>Momus</td>
+      <td>GPT-5.5</td>
+      <td>16k tokens</td>
+      <td>→ claude-opus-4-7 → sonnet-4.6 → kimi-k2.6</td>
+    </tr>
+    <tr>
+      <td>Atlas</td>
+      <td>Claude Sonnet 4.6</td>
+      <td>8k tokens</td>
+      <td>→ kimi-k2.6 → gpt-5.5 medium → glm-5.1</td>
+    </tr>
+    <tr>
+      <td>Sisyphus-Junior</td>
+      <td colspan="3">由绑定 category 自动决定。无独立回退链，继承 category 模型配置。</td>
+    </tr>
+  </table>
+
+  <div class="highlight-box">
+    <p><strong>两个回退系统：</strong>model-fallback (主动，在 chat.params 中替换模型) 和 runtime-fallback (被动，响应 session.error 事件进行重试)。两者独立运行——model-fallback 处理请求前的模型替换，runtime-fallback 处理运行时故障后的恢复。</p>
+  </div>
+</section>
+
+<section id="category-system">
+  <h2>Category 分类系统</h2>
+  <p>Category 将任务路由到最优模型，是 OmO 的核心抽象。Agent 声明需要什么<strong>类型</strong>的工作，而非什么<strong>模型</strong>。系统根据 category 自动选择模型和思考预算。</p>
+
+  <h3>8 个内置 Category</h3>
+  <table>
+    <tr><th>Category</th><th>默认模型</th><th>思考级别</th><th>适用场景</th></tr>
+    <tr>
+      <td><code>visual-engineering</code></td>
+      <td>Gemini 3.1 Pro</td>
+      <td>high</td>
+      <td>前端、UI/UX、设计系统、CSS/样式、响应式布局、动效、视觉 QA</td>
+    </tr>
+    <tr>
+      <td><code>ultrabrain</code></td>
+      <td>GPT-5.5</td>
+      <td>xhigh</td>
+      <td>硬逻辑推理、复杂架构决策、算法设计、安全审计、数学密集任务</td>
+    </tr>
+    <tr>
+      <td><code>deep</code></td>
+      <td>GPT-5.5</td>
+      <td>medium</td>
+      <td>目标导向自主问题解决、端到端特性开发、代码库范围重构</td>
+    </tr>
+    <tr>
+      <td><code>artistry</code></td>
+      <td>Gemini 3.1 Pro</td>
+      <td>high</td>
+      <td>高度创意/艺术任务、设计探索、视觉概念、品牌设计</td>
+    </tr>
+    <tr>
+      <td><code>quick</code></td>
+      <td>GPT-5.4 Mini</td>
+      <td>low</td>
+      <td>琐碎任务：单文件修改、错别字修复、导入排序、简单 lint 修复</td>
+    </tr>
+    <tr>
+      <td><code>unspecified-low</code></td>
+      <td>Claude Sonnet 4.6</td>
+      <td>medium</td>
+      <td>低复杂度杂项任务，不需要专门 category 时使用</td>
+    </tr>
+    <tr>
+      <td><code>unspecified-high</code></td>
+      <td>Claude Opus 4.7</td>
+      <td>max</td>
+      <td>高复杂度杂项任务，跨领域、需要最高推理能力</td>
+    </tr>
+    <tr>
+      <td><code>writing</code></td>
+      <td>Kimi K2.5</td>
+      <td>medium</td>
+      <td>文档、技术写作、README、变更日志、API 文档、知识库文章</td>
+    </tr>
+  </table>
+
+  <h3>task() 委派示例</h3>
+  <pre><code>// 用 category 委派任务——模型自动匹配
+task(
+  category="visual-engineering",
+  description="Redesign dashboard layout",
+  prompt="Redesign the admin dashboard with responsive grid layout...",
+  run_in_background=true          // 后台异步执行
+)
+
+// 加载 skill 并委派——category + skill 组合
+task(
+  category="ultrabrain",
+  load_skills=["security-research"],
+  description="Audit auth module",
+  prompt="Audit authentication flow for security vulnerabilities..."
+)
+
+// 直接指定 agent 类型 (绕过 category 路由)
+task(
+  subagent_type="oracle",
+  description="Review architecture",
+  prompt="Review the proposed architecture for the new payment service..."
+)</code></pre>
+
+  <div class="note">
+    <p><strong>category 与 subagent_type 的区别：</strong>category 路由到 Sisyphus-Junior 并自动匹配模型——灵活、可配置。subagent_type 直接调用指定 Agent (如 oracle、librarian)——确定、不可覆盖。大多数情况优先使用 category。</p>
+  </div>
+</section>
+
+<section id="background-agents">
+  <h2>后台 Agent 系统</h2>
+  <p>后台 Agent 允许 Sisyphus 同时启动多个专家 agent 并行工作，而非顺序等待。这是 OmO 实现高吞吐的核心机制。</p>
+
+  <h3>并行执行模型</h3>
+  <div class="card-grid">
+    <div class="card">
+      <h4>并发控制</h4>
+      <p>每个 <code>providerID/modelID</code> 键默认最多 5 个并发后台任务。超出限制的任务进入 FIFO 队列等待空闲槽位。</p>
+    </div>
+    <div class="card">
+      <h4>上下文隔离</h4>
+      <p>每个后台任务拥有独立的会话上下文，不污染主 session 的上下文窗口。结果通过 <code>background_output(task_id)</code> 按需取回。</p>
+    </div>
+    <div class="card">
+      <h4>可配置限流</h4>
+      <p>通过 <code>background_task.modelConcurrency</code> 和 <code>providerConcurrency</code> 可分别控制每个模型和每个提供商的并发上限。</p>
+    </div>
+    <div class="card">
+      <h4>完成通知</h4>
+      <p>后台任务完成后，系统通过 <code>&lt;system-reminder&gt;</code> 通知主 session，附带 task_id。主 session 通过 <code>background_output(task_id)</code> 取回结果。</p>
+    </div>
+  </div>
+
+  <pre><code>// 启动后台 agent——立即返回 task_id
+task(
+  subagent_type="explore",
+  description="Search auth patterns",
+  prompt="Find all authentication-related patterns across the codebase...",
+  run_in_background=true           // 关键参数
+)
+// → 返回: {"task_id": "bg_abc123", "status": "started"}
+
+// 后续主 session 收到完成通知后取结果
+background_output(task_id="bg_abc123")
+// → 返回: agent 的完整输出</code></pre>
+
+  <div class="note">
+    <p><strong>禁止使用 background_cancel(all=true)：</strong>只能通过 taskId 逐个取消。全量取消会导致不确定状态。</p>
+  </div>
+</section>
+
+<section id="team-mode">
+  <h2>Team Mode (v4.0)</h2>
+  <p>Team Mode 将 OmO 从"一个 agent + 子 agent"转变为<strong>真正的多 agent 协作系统</strong>。Lead agent 协调一个并行运行的团队，通过专用工具族通信。默认为关闭状态。</p>
+
+  <h3>架构概览</h3>
+  <div class="card-grid">
+    <div class="card">
+      <h4>Lead + 成员结构</h4>
+      <p>一个 Lead agent 编排最多 8 个并行成员。成员可以通过 <code>kind: "subagent_type"</code> (直接 agent) 或 <code>kind: "category"</code> (通过 Sisyphus-Junior 路由) 声明。</p>
+    </div>
+    <div class="card">
+      <h4>共享延迟确认邮箱</h4>
+      <p>成员之间通过共享的 deferred-ack mailbox 通信。消息写入 mailbox 目录，接收方轮询读取。确认机制防止消息丢失。</p>
+    </div>
+    <div class="card">
+      <h4>共享任务列表</h4>
+      <p>JSONL 格式任务列表，支持基于文件锁的任务认领 (claim)。成员通过 <code>team_task_create</code> / <code>team_task_claim</code> 协调分工。</p>
+    </div>
+    <div class="card">
+      <h4>可选 Git Worktrees</h4>
+      <p>每个成员可使用独立的 git worktree，防止并发编辑冲突。存储在 <code>~/.omo/teams/{name}/worktrees/</code> 下。</p>
+    </div>
+    <div class="card">
+      <h4>tmux 可视化</h4>
+      <p>启用 <code>tmux_visualization</code> 后，每个成员在独立 tmux pane 中运行，Lead 可实时观察所有成员的工作状态。focus + grid 窗口布局。</p>
+    </div>
+    <div class="card">
+      <h4>成员资格注册表</h4>
+      <p>eligible (Sisyphus, Atlas, Sisyphus-Junior)、conditional (Hephaestus 需显式允许)、hard-reject (Oracle, Librarian, Explore 等——用 task 代替)。</p>
+    </div>
+  </div>
+
+  <h3>完整配置 Schema</h3>
+  <pre><code>// .opencode/oh-my-openagent.jsonc
+{
+  "team_mode": {
+    "enabled": false,                    // 启用 Team Mode (需重启 OpenCode)
+    "tmux_visualization": false,         // tmux 可视化布局
+    "max_parallel_members": 4,           // 最大并行成员数 (1–8)
+    "max_members": 8,                    // 团队总成员硬上限 (1–8)
+    "max_messages_per_run": 10000,       // 每次运行的最大消息数
+    "max_wall_clock_minutes": 120,       // 每次运行的最长执行时间
+    "max_member_turns": 500,             // 每个成员的最大轮次
+    "base_dir": null,                    // 覆盖默认 ~/.omo/teams 或 &lt;project&gt;/.omo/teams
+    "message_payload_max_bytes": 32768,  // 单条消息负载上限 (≥1024)
+    "recipient_unread_max_bytes": 262144,// 接收方未读消息总上限 (≥1024)
+    "mailbox_poll_interval_ms": 3000     // 邮箱轮询间隔 (≥500)
+  }
+}</code></pre>
+
+  <h3>存储布局</h3>
+  <table>
+    <tr><th>路径</th><th>用途</th></tr>
+    <tr><td><code>~/.omo/teams/{name}/config.json</code></td><td>团队规格 (spec)</td></tr>
+    <tr><td><code>~/.omo/teams/{name}/state.json</code></td><td>运行时状态</td></tr>
+    <tr><td><code>~/.omo/teams/{name}/mailbox/</code></td><td>成员间消息</td></tr>
+    <tr><td><code>~/.omo/teams/{name}/tasklist.jsonl</code></td><td>共享任务列表</td></tr>
+    <tr><td><code>~/.omo/teams/{name}/worktrees/</code></td><td>每成员 git worktrees</td></tr>
+  </table>
+
+  <h3>Team Mode 赋能的 Skills</h3>
+  <table>
+    <tr><th>Skill</th><th>团队组成</th><th>机制</th></tr>
+    <tr>
+      <td><strong>hyperplan</strong></td>
+      <td>5 个敌对评审者 (unspecified-low, unspecified-high, deep, ultrabrain, artistry)</td>
+      <td>从正交角度无情批判计划；提炼可辩护的见解；交付给 plan agent 生成可执行计划</td>
+    </tr>
+    <tr>
+      <td><strong>security-research</strong></td>
+      <td>3 个漏洞猎手 + 2 个 PoC 工程师</td>
+      <td>并行审计代码库，证明可利用性 (而非理论风险)，按实际可利用性校准严重性</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p><strong>启用 Team Mode 后 Hook 总数从 54 增至 61：</strong>新增 +1 ToolGuard (team-tool-gating)、+2 Transform (team-mode-status-injector, team-mailbox-injector)、+4 事件处理器 (team-session-events/*)。</p>
+  </div>
+</section>
+
+<section id="agent-ordering">
+  <h2>Agent 排序机制</h2>
+  <p>OmO 强制执行一个固定的、规范性的 Agent 排序：<strong>Sisyphus → Hephaestus → Prometheus → Atlas</strong>。这不是随意的惯例，而是影响 Agent 优先级和行为的关键保证。</p>
+
+  <h3>实现机制</h3>
+  <p><code>installAgentSortShim()</code> 在插件初始化时通过补丁 <code>Array.prototype.toSorted</code> 和 <code>Array.prototype.sort</code> 实现排序。补丁仅当数组包含 ≥2 个规范核心 agent 时才激活，避免影响其他代码。</p>
+
+  <pre><code>// 插件初始化——在 createPluginModule() 中
+installAgentSortShim()
+  // ↓ 补丁 Array.prototype.toSorted
+  // ↓ 补丁 Array.prototype.sort (窄条件)
+  // ↓ 仅当数组包含 ≥2 个核心 agent 时生效</code></pre>
+
+  <h3>排序规则</h3>
+  <table>
+    <tr><th>位置</th><th>Agent</th><th>原因</th></tr>
+    <tr><td>1</td><td>Sisyphus</td><td>主编排器，所有交互的入口</td></tr>
+    <tr><td>2</td><td>Hephaestus</td><td>主要深度工作者，第二高频调用</td></tr>
+    <tr><td>3</td><td>Prometheus</td><td>规划师，执行前调用</td></tr>
+    <tr><td>4</td><td>Atlas</td><td>Todo 编排器，计划执行阶段激活</td></tr>
+  </table>
+
+  <div class="highlight-box">
+    <p>此排序影响 OpenCode 中 Agent 列表的展示顺序、category 解析优先级以及某些内部路由决策。所有非核心 agent (Oracle, Librarian, Explore 等) 按字母顺序排在核心 agent 之后。</p>
+  </div>
+</section>
+
+<!-- ========== 编排系统 ========== -->
+<section id="orchestration-system">
+<h2>编排系统</h2>
+<p>OmO 的编排系统将 Agent 组织为三层架构，将意图转化为精确、可追踪的执行流水线。</p>
+
+<h3>三层架构</h3>
+<p>Agent 并非平等排列。它们按职责分为三个抽象层，每层独立优化：</p>
+<table>
+  <tr><th>层级</th><th>包含 Agent</th><th>职责</th></tr>
+  <tr>
+    <td><strong>规划层</strong></td>
+    <td>人类 + Prometheus + Metis + Momus</td>
+    <td>理解意图、分析需求范围、构建可执行计划、多角度审查验证。所有重大决策在执行前完成。</td>
+  </tr>
+  <tr>
+    <td><strong>执行层</strong></td>
+    <td>Atlas</td>
+    <td>将计划分解为 todo 项，按依赖顺序推进，协调 Worker 层，汇总执行结果向 Sisyphus 报告。</td>
+  </tr>
+  <tr>
+    <td><strong>工作层</strong></td>
+    <td>Sisyphus-Junior + Oracle + Explore + Librarian + category agents</td>
+    <td>具体执行原子任务：搜索代码、分析文档、编写代码、审查输出、运行验证。每个 worker 是独立 agent 实例。</td>
+  </tr>
+</table>
+
+<p>这种分层设计的核心价值：<strong>每层只做一件事，并把那件事做好</strong>。规划层不写代码，工作层不做战略决策。关注点分离 (separation of concerns) 在 agent 系统层面得到了严格贯彻。</p>
+
+<h3>决策流程</h3>
+<p>Sisyphus 根据任务特征自动选择工作模式。决策树如下：</p>
+<div class="card-grid">
+  <div class="card">
+    <h4>简单修复 → 直接执行</h4>
+    <p>用户请求清晰、范围明确。Sisyphus 直接通过 <code>prompt</code> 响应，不经过额外规划流程。典型场景：修正变量名、修复文档 typo、调整导入顺序。</p>
+  </div>
+  <div class="card">
+    <h4>复杂 + 懒人模式 → <code>ultrawork</code></h4>
+    <p>任务复杂但不需要精确规格。Sisyphus 激活 Prometheus 做快速访谈，生成粗略计划后直接进入执行。适合探索性开发、功能原型、快速实验。</p>
+  </div>
+  <div class="card">
+    <h4>复杂 + 精确需求 → <code>@plan</code> 然后 <code>/start-work</code></h4>
+    <p>任务关键、范围模糊、需要严格遵守约束。先调用 <code>@plan</code> 启动完整三阶段规划 (Prometheus 访谈 → Metis 差距分析 → Momus 审查)，审查通过后 <code>/start-work</code> 激活 Atlas 加载计划逐项执行。</p>
+  </div>
+</div>
+
+<h3>Prometheus 访谈模式</h3>
+<p>Prometheus 不比普通 Agent 更聪明——它写更好的提示词。通过像真正工程师一样迭代提问来缩小范围、解决歧义：</p>
+<ol>
+  <li><strong>意图拆解</strong>——将模糊的用户请求转化为结构化问题列表。"你想要 A"→"B 场景下 A 的行为是什么？C 场景呢？"</li>
+  <li><strong>约束发现</strong>——识别用户遗漏的边界条件、兼容性约束、性能要求。</li>
+  <li><strong>方案推演</strong>——对关键决策点进行预验证："这个方案在 X 条件下成立吗？"</li>
+  <li><strong>计划输出</strong>——生成 step-by-step 可执行计划，包含每步的完成标准和验证方法。</li>
+</ol>
+<p>不同任务类型的访谈策略不同：</p>
+<table>
+  <tr><th>任务类型</th><th>典型问题</th></tr>
+  <tr><td>重构/安全性</td><td>关注现有行为保持、逆向兼容、测试覆盖率。第一个问题："你怎么知道改对了？"</td></tr>
+  <tr><td>从零搭建/探索</td><td>关注技术选型、架构决策、扩展性。第一个问题："你确定这是正确的问题，而非症状？"</td></tr>
+  <tr><td>中型特性/防护栏</td><td>关注边界条件、错误处理、用户预期。第一个问题："边界情况你考虑了吗？"</td></tr>
+  <tr><td>架构/战略</td><td>关注权衡、长期影响、正交性。第一个问题："六个月后你还想要这个架构吗？"</td></tr>
+</table>
+
+<h3>Metis 与 Momus</h3>
+<p>规划阶段的两道质量防线，一前一后。</p>
+<p><strong>Metis</strong> 在计划最终确定前执行差距分析 (gap analysis)。它不写计划——只找问题。检查清单：</p>
+<ul>
+  <li><strong>隐藏意图</strong>——用户真正想要什么 vs 说了什么。有没有未表露的目标？</li>
+  <li><strong>歧义</strong>——哪些表述可被多种解释。需要澄清哪些点？</li>
+  <li><strong>AI 失败模式</strong>——已知的 AI code smell 模式：幻觉、过时 API 假设、样板崇拜。</li>
+  <li><strong>缺失标准</strong>——验收条件是否完整，成功标准是否可测量？</li>
+  <li><strong>边缘情况</strong>——边界条件、空值、失败路径是否被考虑？</li>
+</ul>
+<p><strong>Momus</strong> 对已完成计划执行审查循环 (review loop)。四项黄金准则：</p>
+<ul>
+  <li><strong>清晰度 (Clarity)</strong>——每项任务是否精确描述了要做的事，而非意图？</li>
+  <li><strong>可验证性 (Verification)</strong>——完成标准是否可测量、可证明？不是"实现 X"而是"X 通过如下测试"？</li>
+  <li><strong>上下文完整性 (Context)</strong>——计划是否包含足够上下文，使执行者无需回头追问？</li>
+  <li><strong>大局观 (Big Picture)</strong>——是否有被遗忘的需求、依赖或约束？</li>
+</ul>
+<p>Momus 的 <strong>OKAY 阈值</strong>非常严格：100% 文件引用有确切路径，≥80% 的决策有明确来源引用，≥90% 的验收条件可用具体方法证明，0 个未标记的假设。</p>
+
+<div class="note">
+  <p>Metis 和 Momus 都是只读 Agent。它们发现缺陷，但由人类或 Prometheus 决定是否修复。这是 OmO 规划哲学的核心部分——审查者不执行，执行者不审查。</p>
+</div>
+
+<h3>Atlas 执行引擎</h3>
+<p>Atlas 不是普通的代码编写 Agent。它是指挥官 (conductor)，而非匠人 (craftsman)。</p>
+<p>工作模式包含 6 个顺序阶段：</p>
+<ol>
+  <li><strong>读计划</strong>——加载 Prometheus 阶段生成的 <code>.omo/plans/*.md</code> 计划文件，解析 todo 结构</li>
+  <li><strong>分析</strong>——理解 todo 之间的依赖关系，确定最优执行顺序，识别可并行的任务</li>
+  <li><strong>积累智慧</strong>——每次执行过程中记录 learnings，持续优化后续决策</li>
+  <li><strong>委派</strong>——对复杂或探索性的子任务，通过 <code>task()</code> 委派给 Oracle 或 category agents</li>
+  <li><strong>验证</strong>——每项 todo 完成后立即运行 <code>lsp_diagnostics</code>，确保零错误后再推进</li>
+  <li><strong>报告</strong>——定期向 Sisyphus 汇报进度、阻塞项和阶段性结果</li>
+</ol>
+
+<p><strong>智慧积累系统 (Wisdom Accumulation)</strong>：Atlas 将运行过程中产生的洞察持久化到 <code>.omo/notepads/{plan-name}/</code> 目录下：</p>
+<table>
+  <tr><th>文件</th><th>用途</th></tr>
+  <tr><td><code>learnings.md</code></td><td>新发现的代码库模式、必须遵守的约定、对项目的深层理解</td></tr>
+  <tr><td><code>decisions.md</code></td><td>重大架构决策及其理由。避免同一问题反复讨论</td></tr>
+  <tr><td><code>issues.md</code></td><td>遇到的 bug 和阻塞及其解决方式</td></tr>
+  <tr><td><code>verification.md</code></td><td>验证步骤、测试结果、QA 证据链</td></tr>
+  <tr><td><code>problems.md</code></td><td>todo 本身未覆盖的深层代码库问题</td></tr>
+</table>
+
+<p><strong>不要将 Atlas 与 Sisyphus 混淆</strong>：Sisyphus 是主编排器，面向用户交互；Atlas 是 todo 编排器，面向计划执行。Sisyphus 调用 Atlas 来推进计划，但只在高层次监控进度——具体执行细节完全由 Atlas 决定。</p>
+
+<h3>Sisyphus-Junior 约束</h3>
+<p>Sisyphus-Junior 是 category 路由的目标 Agent，设计上故意受限以保证可预测性：</p>
+<ul>
+  <li><strong>专注 (Focused)</strong>——不能委派任务、不能启动后台 task()。单一职责，只做被分配的那件事。</li>
+  <li><strong>纪律 (Disciplined)</strong>——强制 todo 痴迷。每步之前写 todo，完成后立即标记完成。不允许跳过验证。</li>
+  <li><strong>验证 (Verified)</strong>——每项修改后必须运行 <code>lsp_diagnostics</code>，确保零错误。不干净不前进。</li>
+  <li><strong>受限 (Constrained)</strong>——只能读取计划文件 (read-only)。不能修改 config、schema、package.json 等关键文件。</li>
+</ul>
+<p><strong>为什么回退链足够？</strong>Sisyphus-Junior 承载的任务相对简单——通过 category 路由的通常是特定领域的原子任务。系统的智能 (编排、规划、审查) 由顶层 Agent 完成，worker 层不需要最强模型。这是 OmO 的核心设计权衡：<strong>系统智能 > worker 模型能力</strong>。编排和审查的质量比执行模型的能力更影响最终结果。</p>
+<p><strong>System Reminder 机制</strong>：Boulder 状态系统在 todo 长时间无进展时，通过 <code>&lt;system-reminder&gt;</code> 推送提醒，确保 Sisyphus-Junior 不会偏移任务目标。这是系统的"执拗性"保障。</p>
+</section>
+
+<!-- ========== Team Mode 详解 ========== -->
+<section id="team-mode-expanded">
+<h2>Team Mode 详解</h2>
+<p>Team Mode 将 OmO 从"一个 Agent + 若干子 Agent"的架构，升级为<strong>真正的多 Agent 协作系统</strong>。一个 Lead Agent 协调一个并行运行的专家团队，通过专用通信和协调工具协作。</p>
+
+<h3>何时使用</h3>
+<p>Team Mode 不是默认开启的——它有显著的开销 (上下文窗口、通信延迟)。最适合以下场景：</p>
+<ul>
+  <li><strong>并行探索</strong>——需要同时从多个方向调研。例如同时研究前端框架选型和后端数据库方案，两个成员并行，时间减半。</li>
+  <li><strong>长时间重构</strong>——大型代码库拆分，多个成员独立处理不同模块，每个成员在自己的 worktree 中工作。</li>
+  <li><strong>研究 + 实现流水线</strong>——部分成员负责研究可行性方案和 API 设计，另一部分成员同步开始原型实现。</li>
+</ul>
+
+<h3>配置与启用</h3>
+<p>在项目配置文件 <code>.opencode/oh-my-openagent.jsonc</code> 中启用：</p>
+<pre><code>{
+  "team_mode": {
+    "enabled": true,
+    "max_parallel_members": 4,
+    "tmux_visualization": false
+  }
+}</code></pre>
+<div class="note">
+  <p><strong>已知问题：</strong>v4.2.1 之前的版本存在配置读取 bug——启用 Team Mode 后有时需要重启 OpenCode 两次才能使配置完全生效。此问题已在 v4.2.1 中修复。如果你使用的是旧版本，可在 Team Mode 技能 (hyperplan, security-research) 的配置中单独设置 <code>"team_mode": {...}</code> 块作为临时方案。</p>
+</div>
+
+<h3>完整配置 Schema</h3>
+<p>11 个配置字段覆盖团队行为的所有方面：</p>
+<table>
+  <tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr>
+  <tr><td><code>enabled</code></td><td>boolean</td><td>false</td><td>启用 Team Mode。需重启 OpenCode 生效。</td></tr>
+  <tr><td><code>tmux_visualization</code></td><td>boolean</td><td>false</td><td>为每个成员创建独立 tmux pane，实时可视化团队工作。</td></tr>
+  <tr><td><code>max_parallel_members</code></td><td>number</td><td>4</td><td>同时运行的成员数上限。范围 1–8。</td></tr>
+  <tr><td><code>max_members</code></td><td>number</td><td>8</td><td>团队总成员硬上限。范围 1–8。</td></tr>
+  <tr><td><code>max_messages_per_run</code></td><td>number</td><td>10000</td><td>团队单次运行的最大消息总数。</td></tr>
+  <tr><td><code>max_wall_clock_minutes</code></td><td>number</td><td>120</td><td>团队单次运行的最大墙钟时间 (分钟)。</td></tr>
+  <tr><td><code>max_member_turns</code></td><td>number</td><td>500</td><td>每个成员的最大轮次上限。</td></tr>
+  <tr><td><code>base_dir</code></td><td>string|null</td><td>null</td><td>覆盖默认 <code>~/.omo/teams</code> 或 <code>项目/.omo/teams</code>。</td></tr>
+  <tr><td><code>message_payload_max_bytes</code></td><td>number</td><td>32768</td><td>单条消息负载上限。最小值 1024。</td></tr>
+  <tr><td><code>recipient_unread_max_bytes</code></td><td>number</td><td>262144</td><td>接收方未读消息总上限。最小值 1024。</td></tr>
+  <tr><td><code>mailbox_poll_interval_ms</code></td><td>number</td><td>3000</td><td>成员轮询邮箱的间隔。最小值 500 ms。</td></tr>
+</table>
+
+<p>配置层级：项目配置 > 用户配置 > 默认值。项目级别的 <code>.opencode/oh-my-openagent.jsonc</code> 优先级最高。</p>
+
+<h3>成员资格</h3>
+<p>不是所有 Agent 都能加入团队。<code>AGENT_ELIGIBILITY_REGISTRY</code> 定义了三条严格的资格规则：</p>
+<table>
+  <tr><th>资格</th><th>Agent</th><th>说明</th></tr>
+  <tr>
+    <td><strong>eligible (合格)</strong></td>
+    <td>Sisyphus, Atlas, Sisyphus-Junior</td>
+    <td>默认允许加入团队。可直接通过 <code>kind: "subagent_type"</code> 声明为成员。</td>
+  </tr>
+  <tr>
+    <td><strong>conditional (条件合格)</strong></td>
+    <td>Hephaestus</td>
+    <td>默认不具备 <code>teammate: "allow"</code> 权限。需在 <code>tool-config-handler.ts</code> 中显式授予 D-36 权限，或使用 <code>subagent_type: "sisyphus"</code> 代替。</td>
+  </tr>
+  <tr>
+    <td><strong>hard-reject (硬拒绝)</strong></td>
+    <td>Oracle, Librarian, Explore, Multimodal-Looker, Metis, Momus, Prometheus</td>
+    <td>解析阶段直接拒绝。它们的设计目的与团队协作不兼容——要么只读、要么规划、要么审查。用 <code>task()</code> 委派代替。</td>
+  </tr>
+</table>
+<p><strong>为什么 Oracle 和 Prometheus 被硬拒绝？</strong>Oracle 是只读顾问——它不写代码，不编辑文件。在需要读写的团队协作中，Oracle 的角色被 Lead 的编排和 <code>task()</code> 调用替代。Prometheus 是规划师——规划完成后它的使命就结束了。在团队场景中，Lead 本身承担了规划职责，Prometheus 的访谈模式更适合在团队启动前使用。</p>
+
+<h3>生命周期</h3>
+<p>一个团队从创建到销毁经历 5 个阶段：</p>
+<ol>
+  <li><strong>创建 (team_create)</strong>——Lead 调用 <code>team_create</code> 工具定义成员列表、配置文件、初始化共享状态 (mailbox、tasklist)。</li>
+  <li><strong>委派 (Delegate)</strong>——Lead 通过 <code>team_send_message</code> 向成员分配任务。成员从 mailbox 轮询获取新消息 (<code>mailbox_poll_interval_ms</code> 控制轮询频率)。</li>
+  <li><strong>认领与完成 (Claim & Complete)</strong>——成员通过 <code>team_task_claim</code> 从共享 tasklist 中认领任务，执行完毕后 <code>team_task_update</code> 更新状态和结果。</li>
+  <li><strong>关闭 (Shutdown)</strong>——Lead 确认所有任务完成，调用 <code>team_shutdown_request</code>。各成员通过 <code>team_approve_shutdown</code> 确认或 <code>team_reject_shutdown</code> 拒绝 (如有未完成任务)。</li>
+  <li><strong>删除 (Delete)</strong>——所有成员确认关闭后，清理 <code>~/.omo/teams/{name}/</code> 下的所有工件。</li>
+</ol>
+
+<h3>存储布局</h3>
+<p>团队状态存储在 <code>~/.omo/teams/{name}/</code> (用户级) 或 <code>项目/.omo/teams/{name}/</code> (项目级，优先级更高)：</p>
+<pre><code>~/.omo/teams/{name}/
+├── config.json              # 团队规格：成员列表、权限声明、配置参数
+├── state.json               # 运行时状态：活跃成员、当前阶段、心跳
+├── mailbox/                 # 成员间消息队列 (deferred-ack)
+│   ├── {memberId}/          # 每个成员独立收件箱目录
+│   │   ├── 0001.json        # 消息序号递增
+│   │   └── ...
+│   └── ...
+├── inboxes/                 # 替代存储方案 (按 teamRunId 隔离)
+│   └── {teamRunId}/
+│       ├── state.json       # 此运行的状态快照
+│       └── ...
+├── tasklist.jsonl           # 共享任务列表 (JSONL 格式，支持文件锁认领)
+└── worktrees/               # 可选的每成员 git worktree
+    ├── sisyphus/            # 成员独立的 worktree
+    ├── atlas/
+    └── ...</code></pre>
+
+<h3>12 个 Team Tool</h3>
+<table>
+  <tr><th>工具</th><th>用途</th></tr>
+  <tr><td><code>team_create</code></td><td>创建新团队。定义成员列表、运行时配置、初始化共享状态。</td></tr>
+  <tr><td><code>team_delete</code></td><td>销毁团队。清理 mailbox、tasklist、worktrees 等所有状态。</td></tr>
+  <tr><td><code>team_shutdown_request</code></td><td>Lead 发起关闭流程。通知所有成员准备结束。</td></tr>
+  <tr><td><code>team_approve_shutdown</code></td><td>成员确认关闭。表示该成员已完成所有任务。</td></tr>
+  <tr><td><code>team_reject_shutdown</code></td><td>成员拒绝关闭。附理由——还有未完成任务。</td></tr>
+  <tr><td><code>team_send_message</code></td><td>发送消息给特定成员或广播给全团队。</td></tr>
+  <tr><td><code>team_task_create</code></td><td>在共享 tasklist 中添加新任务。</td></tr>
+  <tr><td><code>team_task_list</code></td><td>列出所有团队任务及其当前状态。</td></tr>
+  <tr><td><code>team_task_update</code></td><td>更新任务状态、进度、附件结果。</td></tr>
+  <tr><td><code>team_task_get</code></td><td>获取单个任务的详细信息和历史。</td></tr>
+  <tr><td><code>team_status</code></td><td>查询团队整体运行状态和每个成员的健康状况。</td></tr>
+  <tr><td><code>team_list</code></td><td>列出所有活跃的团队。</td></tr>
+</table>
+
+<h3>Bounds (边界限制)</h3>
+<p>团队运行在定义明确的边界内。超出任一限制将触发终止或告警：</p>
+<table>
+  <tr><th>维度</th><th>上限</th><th>说明</th></tr>
+  <tr><td>最大成员数</td><td>8</td><td>团队总成员硬上限。不可通过配置超过 8。</td></tr>
+  <tr><td>并行运行数</td><td>4</td><td><code>max_parallel_members</code>，默认值。可配置范围 1–8。</td></tr>
+  <tr><td>单条消息大小</td><td>32 KB</td><td><code>message_payload_max_bytes</code>。超过的负载会被截断或拒绝。</td></tr>
+  <tr><td>接收方未读上限</td><td>256 KB</td><td><code>recipient_unread_max_bytes</code>。防止单成员被消息淹没。</td></tr>
+  <tr><td>每次运行消息数</td><td>10,000</td><td><code>max_messages_per_run</code>。到达后强制终止。</td></tr>
+  <tr><td>每次运行时间</td><td>120 分钟</td><td><code>max_wall_clock_minutes</code>。到达后强制终止。</td></tr>
+  <tr><td>单成员轮次</td><td>500</td><td><code>max_member_turns</code>。防止单个成员无限循环。</td></tr>
+</table>
+
+<h3>Worktrees</h3>
+<p>Team Mode 支持为每个成员分配独立的 git worktree，彻底消除并发编辑冲突。存储在 <code>~/.omo/teams/{name}/worktrees/{memberName}/</code> 下。</p>
+<p>工作流程：成员启动时自动创建 worktree → 成员在独立分支上工作 → 成员完成时自动提交变更 → Lead 从各 worktree 拉取变更 → 合并到主分支。冲突发生时，Lead 负责解决。</p>
+<p>Worktrees 不是默认启用的——仅在成员数 > 1 且有文件级并发风险时推荐启用。</p>
+
+<h3>TMUX 可视化</h3>
+<p>启用 <code>tmux_visualization: true</code> 后，团队的每个成员在独立的 tmux pane 中运行。布局设计：</p>
+<ul>
+  <li>Lead pane 位于焦点位置 (主窗口左/上侧)</li>
+  <li>成员 pane 以 grid 布局排列 (右/下侧)，每个 pane 实时流式输出</li>
+  <li>Lead 可随时扫视任意 pane 了解成员当前状态</li>
+  <li>Team Mode 结束时自动恢复原始 tmux 布局</li>
+</ul>
+<p>这解决了多 Agent 系统最头疼的问题之一——<strong>可观察性</strong>。没有 tmux 可视化时，Lead 只能通过 mailbox 消息间接了解成员进度，延迟高且信息碎片化。tmux 布局将不可见变为可见。</p>
+
+<h3>限制</h3>
+<p>Team Mode 并非万能。以下是明确的不适用范围：</p>
+<ul>
+  <li><strong>不支持嵌套团队</strong>——团队成员不能创建子团队。展开子问题用 <code>task()</code> 委派给 category agent 即可。</li>
+  <li><strong>不支持同步回复</strong>——所有团队通信基于 mailbox 轮询。通信延迟由 <code>mailbox_poll_interval_ms</code> (默认 3s) 决定。</li>
+  <li><strong>成员不能调用 delegate-task</strong>——只有 Lead 拥有委派权限。成员专注于分配的任务，不能自行扩散工作范围。</li>
+  <li><strong>无单方面强制关闭</strong>——关闭流程需要 Lead 发起 + 所有成员确认。任何成员可拒绝关闭。</li>
+</ul>
+</section>
+
+<!-- ========== 使用模式 ========== -->
+<section id="usage-patterns">
+<h2>使用模式</h2>
+<p>理解 Agent 间不同的协作模式，在不同场景中选择最合适的调用方式。</p>
+
+<h3>如何调用 Prometheus</h3>
+<p>两种方式启动 Prometheus 的访谈式规划：</p>
+<table>
+  <tr><th>方法</th><th>操作</th><th>行为</th><th>适用场景</th></tr>
+  <tr>
+    <td><strong>方法 1: Switch Agent</strong></td>
+    <td>通过 Agent 选择界面主动切换到 Prometheus</td>
+    <td>Prometheus 完全接管对话，直接开始访谈流程</td>
+    <td>明确知道需要深度规划、任务模糊度极高时</td>
+  </tr>
+  <tr>
+    <td><strong>方法 2: <code>@plan</code> 命令</strong></td>
+    <td>在消息中嵌入 <code>@plan</code> 指令</td>
+    <td>Sisyphus 自动调用 Prometheus 进行规划，完成后将计划转交 Momus 审查，然后返回可执行计划</td>
+    <td>日常开发中顺带触发规划，不想手动切换 Agent 时</td>
+  </tr>
+</table>
+
+<h3><code>/start-work</code> 与会话连续性</h3>
+<p><code>/start-work</code> 是连接规划阶段和执行阶段的关键桥梁。它向 Atlas 发出信号，加载 Prometheus 生成的可执行计划并开始执行。</p>
+
+<p><strong>背后机制：boulder.json</strong></p>
+<p>Prometheus 生成计划后，系统在 <code>.omo/plans/{plan-name}/</code> 下创建 <code>boulder.json</code>。该文件记录：所有 todo 项、每项的完成状态、依赖关系、验证标准。Atlas 读取此文件来恢复和推进工作进度。</p>
+
+<p>两种启动模式：</p>
+<ul>
+  <li><strong>初始模式 (Init)</strong>——首次启动新计划。Atlas 读取 <code>plan.md</code>，解析 todo 结构，写入 <code>boulder.json</code>，从第一项开始执行。</li>
+  <li><strong>恢复模式 (Resume)</strong>——会话中断后重新启动。Atlas 读取 <code>boulder.json</code> 的已有进度，标记已完成的 todo，从第一个未完成项继续。</li>
+</ul>
+
+<p>典型执行时间线：</p>
+<ol>
+  <li>用户提出复杂需求 → Sisyphus 判断需要正式规划</li>
+  <li>用户输入 <code>@plan 实现用户认证系统</code> → Prometheus 启动访谈</li>
+  <li>Prometheus 产出 <code>.omo/plans/auth-system/plan.md</code> → Momus 审查</li>
+  <li>用户输入 <code>/start-work</code> → Atlas 加载计划 → 写入 <code>boulder.json</code></li>
+  <li>Atlas 逐项执行 todo → 每项完成后 <code>lsp_diagnostics</code> 验证 → 更新 boulder.json</li>
+  <li>所有 todo 完成 → Atlas 向 Sisyphus 报告 → Sisyphus 汇总最终结果给用户</li>
+  <li>中断恢复：新会话中 <code>/start-work</code> → Atlas 读取 boulder.json → 从断点继续</li>
+</ol>
+
+<h3>Hephaestus vs Sisyphus + ultrawork</h3>
+<p>OmO 提供两种"深度工作"模式。它们不是竞争关系，而是针对不同任务特征优化的互补方案：</p>
+<table>
+  <tr><th>维度</th><th>Hephaestus</th><th>Sisyphus + ultrawork</th></tr>
+  <tr><td>推荐模型</td><td>GPT-5.5</td><td>Claude Opus 4.7 / Kimi K2.6</td></tr>
+  <tr><td>工作方式</td><td>自主探索 + 端到端执行。给目标，不给步骤。</td><td>Todo 驱动 + 委派。Sisyphus 规划并协调多个专家 agent。</td></tr>
+  <tr><td>最佳场景</td><td>探索性开发、端到端特性实现、代码库范围重构</td><td>需要精确步骤的复杂任务、多文件多模块变更、严格质量把关</td></tr>
+  <tr><td>规划策略</td><td>内隐式——Hephaestus 自主决定下一步做什么，不做显式记录</td><td>外显式——Prometheus 生成书面计划，Momus 审查，Atlas 按计划执行</td></tr>
+  <tr><td>委派倾向</td><td>Hephaestus 可以调用 <code>task()</code>，但倾向于自主完成</td><td>Sisyphus 频繁委派，最大化并行度，让专家做专家的事</td></tr>
+  <tr><td>温度</td><td>稍高——鼓励创造性探索和非常规解法</td><td>较低——强调纪律性、可追溯性和输出一致性</td></tr>
+  <tr><td>可追溯性</td><td>低——Hephaestus 不记录决策过程，结果导向</td><td>高——每一步都有 plan、review、boulder.json 记录</td></tr>
+</table>
+
+<p><strong>选择原则</strong>：需要<strong>创造力 + 自主性</strong> → Hephaestus。需要<strong>可靠性 + 可追溯性</strong> → Sisyphus + ultrawork。如果你不确定——默认用 ultrawork。Hephaestus 适合你明确知道"做什么"但不确定"怎么做"的场景。</p>
+
+<h3>Category + Skill 系统</h3>
+<p>Category 是 OmO 最具颠覆性的抽象之一。它从根本上解耦了"做什么类型的工作"和"用什么模型来做"。</p>
+
+<p><strong>为什么 Category 是革命性的？</strong></p>
+<p>传统系统要求用户或 Agent 手动选择模型。但模型名称本身会带来<strong>分布偏差 (distributional bias)</strong>——如果 Agent 的 system prompt 里写着"你运行在 Claude Opus 上"，即使 prompt 的其余部分完全一致，其行为也会与"你运行在 GPT-5.4 Mini 上"不同。Agent 会不自觉地"演"出它以为该模型应有的风格。</p>
+<p>Category 打破了这种耦合。Agent 不需要知道自己在什么模型上运行。它只需要知道它做的是 "quick" 还是 "ultrabrain" 类的工作。系统在背后完成任务到模型的匹配。</p>
+
+<pre><code>// Category 路由——模型完全自动决定
+task(
+  category="quick",                  // 自动路由到 GPT-5.4 Mini
+  description="Fix typo in readme",
+  prompt="Fix the typo in line 23 of README.md"
+)
+
+// Skill + Category 组合——加载领域知识
+task(
+  category="ultrabrain",
+  load_skills=["security-research"],  // 加载安全审计 skill
+  description="Audit payment flow",
+  prompt="Find vulnerabilities in payment processing..."
+)
+
+// Skill 加载优先级 (由近到远)
+// 1. project — .opencode/skills/*/SKILL.md
+// 2. opencode — 系统自带 skills
+// 3. user — ~/.config/opencode/skills/*/SKILL.md
+// 4. builtin — 插件内置 skills</code></pre>
+
+<p><strong>Skill MCP 隔离</strong>：每个 skill 的 MCP 服务器按 <code>${sessionID}:${skillName}:${serverName}</code> 键隔离。同一 skill 在两个不同会话中启动的 MCP 实例不共享任何状态。这从根本上防止了上下文污染和认证凭据冲突。</p>
+
+<h3>Background Task 并发</h3>
+<p>Background Agent 系统提供生产级别的并发控制：</p>
+<ul>
+  <li><strong>默认并发</strong>：每个 <code>providerID/modelID</code> 组合最多 5 个并发后台任务</li>
+  <li><strong>可配置</strong>：通过 <code>background_task.modelConcurrency</code> 和 <code>background_task.providerConcurrency</code> 分别调整模型级别和提供商级别的并发上限</li>
+  <li><strong>FIFO 队列</strong>：超出并发上限的任务进入 FIFO 队列，等待空闲槽位自动启动</li>
+  <li><strong>上下文隔离</strong>：每个后台任务拥有独立的会话上下文，不污染主 session 的上下文窗口</li>
+  <li><strong>完成通知</strong>：后台任务完成后，系统通过 <code>&lt;system-reminder&gt;</code> 通知主 session，附带 task_id。主 session 通过 <code>background_output(task_id)</code> 取回完整结果</li>
+</ul>
+
+<div class="note">
+  <p><strong>禁止使用 background_cancel(all=true)：</strong>全量取消会导致不确定状态。始终通过 taskId 逐个取消后台任务。这是系统的硬性约束——如果不遵守，未完成的任务可能在取消后继续写入 session 状态，造成数据损坏。</p>
+</div>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="level-1-basics.html">← 上一层：基本概念</a>
+  <a class="next" href="level-2.5-model-matching.html">下一层：模型匹配深度专题 →</a>
+</div>
+
+</main>
+</body>
+</html>

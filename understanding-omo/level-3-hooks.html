@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第三层 · Hook 与工具系统 — Oh My OpenAgent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">由浅入深 · 第三层</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul class="nav-back">
+      <li><a href="guide.html">← 返回导读</a></li>
+      <li><a href="level-1-basics.html">← 第一层</a></li>
+      <li><a href="level-2-agents.html">← 第二层</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">深度阅读</div>
+    <ul>
+      <li><a href="level-1-basics.html">第一层 · 基本概念</a></li>
+      <li><a href="level-2-agents.html">第二层 · Agent 系统</a></li>
+      <li><a href="level-2.5-model-matching.html">第二层半 · 模型匹配</a></li>
+      <li><a class="current" href="level-3-hooks.html">第三层 · Hook 与工具</a></li>
+      <li><a href="level-4-architecture.html">第四层 · 架构深度</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#hook-architecture">Hook 架构</a></li>
+      <li><a href="#hook-handlers">Hook 处理器</a></li>
+      <li><a href="#hook-examples">Hook 实例</a></li>
+      <li><a href="#tool-system">工具系统</a></li>
+      <li><a href="#mcp-system">MCP 系统</a></li>
+      <li><a href="#config-pipeline">配置管道</a></li>
+      <li><a href="#config-example">配置示例</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hook-architecture">
+  <div class="breadcrumb">
+    <a href="guide.html">导读</a> → <a href="level-1-basics.html">第一层</a> → <a href="level-2-agents.html">第二层</a> → <span>第三层：Hook 与工具系统</span>
+  </div>
+
+  <h1>第三层 · Hook 与工具系统</h1>
+  <p style="font-size:15px;color:var(--text);">Hook 是 OmO 的生命线——在每个关键生命周期点拦截、变换、守卫、延续会话。工具是 Agent 的手和眼——从文件读写到 MCP 搜索，从后台任务到 Team 协作。</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">53</div><div class="label">基础 Hook</div></div>
+    <div class="stat"><div class="num">+7</div><div class="label">Team Mode</div></div>
+    <div class="stat"><div class="num">20</div><div class="label">常驻工具</div></div>
+    <div class="stat"><div class="num">+19</div><div class="label">条件工具</div></div>
+    <div class="stat"><div class="num">3</div><div class="label">级 MCP</div></div>
+  </div>
+
+  <h2>五层 Hook 组合架构</h2>
+  <p>Hook 系统采用 <strong>5 层组合模式</strong>，每层负责不同关注面：</p>
+
+  <div class="layer-diagram">
+    <div class="layer" style="border-color:var(--accent);">
+      <div class="name" style="color:var(--accent);">Session 层 — 23 个 Hook</div>
+      <div class="desc">会话级事件处理：keyword-detector / runtime-fallback / boulder-state / 生命周期事件分发</div>
+    </div>
+    <div class="layer" style="border-color:var(--pink);">
+      <div class="name" style="color:var(--pink);">ToolGuard 层 — 17 个 Hook</div>
+      <div class="desc">工具执行前守卫：write-existing-file-guard / rules-injector / prometheus-md-only / label-truncator</div>
+    </div>
+    <div class="layer" style="border-color:var(--green);">
+      <div class="name" style="color:var(--green);">Transform 层 — 4 个 Hook</div>
+      <div class="desc">消息 / 提示变换：context-injection / thinking-block-validation</div>
+    </div>
+    <div class="layer" style="border-color:var(--orange);">
+      <div class="name" style="color:var(--orange);">Continuation 层 — 7 个 Hook</div>
+      <div class="desc">会话持续机制：todo-continuation / compaction-autocontinue</div>
+    </div>
+    <div class="layer" style="border-color:var(--purple);">
+      <div class="name" style="color:var(--purple);">Skill 层 — 2 个 Hook</div>
+      <div class="desc">技能生命周期：skill-mcp-manager</div>
+    </div>
+    <div class="layer layer-adapter" style="border-style:dashed;">
+      <div class="name" style="color:var(--cyan);">+ Team Mode — 7 个 Hook (条件)</div>
+      <div class="desc"><code>team_mode.enabled</code> 时注入：team-tool-gating (ToolGuard +1) / team-mode-status-injector (Transform +1) / team-mailbox-injector (Transform +1) / 4 个直接事件处理器 (team-session-events)</div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>层级</th><th>数量</th><th>关注面</th><th>典型 Hook</th></tr>
+    <tr>
+      <td><strong>Session</strong></td><td>23</td><td>会话级事件处理</td>
+      <td>keyword-detector, runtime-fallback, boulder-state, session-created/deleted/idle/error</td>
+    </tr>
+    <tr>
+      <td><strong>ToolGuard</strong></td><td>17</td><td>工具执行前守卫</td>
+      <td>write-existing-file-guard, rules-injector, prometheus-md-only, label-truncator</td>
+    </tr>
+    <tr>
+      <td><strong>Transform</strong></td><td>4</td><td>消息 / 提示变换</td>
+      <td>context-injection, thinking-block-validation</td>
+    </tr>
+    <tr>
+      <td><strong>Continuation</strong></td><td>7</td><td>会话持续机制</td>
+      <td>todo-continuation, compaction-autocontinue</td>
+    </tr>
+    <tr>
+      <td><strong>Skill</strong></td><td>2</td><td>技能生命周期</td>
+      <td>skill-mcp-manager</td>
+    </tr>
+    <tr style="border-top:2px solid var(--accent);">
+      <td><em>基础合计</em></td><td><strong>53</strong></td><td colspan="2"></td>
+    </tr>
+    <tr>
+      <td><strong>+Team Mode</strong></td><td>+7</td><td>Team 专用 hook</td>
+      <td>team-tool-gating, team-mode-status-injector, team-mailbox-injector, +4 event handlers</td>
+    </tr>
+    <tr>
+      <td><strong>总计</strong></td><td><strong>60</strong></td><td colspan="2"><code>team_mode.enabled=true</code> 时启用全部 60 个 hook</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p>Hook 系统通过 <code>createCoreHooks()</code> + <code>createContinuationHooks()</code> + <code>createSkillHooks()</code> 组合而成。Team Mode 的 7 个额外 hook 在 <code>createHooks()</code> 中条件注入。每个 hook 可通过 <code>disabled_hooks</code> 配置项单独禁用。</p>
+  </div>
+</section>
+
+<section id="hook-handlers">
+  <h2>14 个 OpenCode Hook 处理器</h2>
+  <p>OmO 向 OpenCode 注册了 14 个 hook 处理器，映射到 OpenCode 的原生生命周期事件：</p>
+
+  <table>
+    <tr><th>处理器</th><th>OpenCode Hook</th><th>用途</th></tr>
+    <tr>
+      <td><code>config</code></td>
+      <td><code>config</code></td>
+      <td>6 阶段配置管道：provider → plugin-components → agents → tools → MCPs → commands</td>
+    </tr>
+    <tr>
+      <td><code>tool</code></td>
+      <td><code>tool</code></td>
+      <td>注册 20–39 个工具 (按配置开关: team-mode +12, task 系统 +4, hashline +1, interactive_bash +1, look_at +1)</td>
+    </tr>
+    <tr>
+      <td><code>tool.definition</code></td>
+      <td><code>tool.definition</code></td>
+      <td>每工具定义变换 (应用 todo-description-override)</td>
+    </tr>
+    <tr>
+      <td><code>chat.message</code></td>
+      <td><code>chat.message</code></td>
+      <td>首条消息变体、会话设置、关键词检测 (ultrawork/search/analyze/team)</td>
+    </tr>
+    <tr>
+      <td><code>chat.params</code></td>
+      <td><code>chat.params</code></td>
+      <td>Anthropic effort 参数、think 模式、运行时回退覆盖</td>
+    </tr>
+    <tr>
+      <td><code>chat.headers</code></td>
+      <td><code>chat.headers</code></td>
+      <td>Copilot x-initiator 请求头注入</td>
+    </tr>
+    <tr>
+      <td><code>command.execute.before</code></td>
+      <td><code>command.execute.before</code></td>
+      <td>斜杠命令拦截等预命令守卫</td>
+    </tr>
+    <tr>
+      <td><code>event</code></td>
+      <td><code>event</code></td>
+      <td>会话生命周期 (created/deleted/idle/error)、OpenClaw 分发、运行时回退</td>
+    </tr>
+    <tr>
+      <td><code>tool.execute.before</code></td>
+      <td><code>tool.execute.before</code></td>
+      <td>预工具守卫：write-existing-guard / label-truncator / rules-injector / prometheus-md-only</td>
+    </tr>
+    <tr>
+      <td><code>tool.execute.after</code></td>
+      <td><code>tool.execute.after</code></td>
+      <td>后工具 hook：output-truncator / comment-checker / hashline-read-enhancer / json-error-recovery</td>
+    </tr>
+    <tr>
+      <td><code>experimental.chat.messages.transform</code></td>
+      <td><code>experimental.chat.messages.transform</code></td>
+      <td>上下文注入、thinking-block 验证、工具对验证、关键词检测</td>
+    </tr>
+    <tr>
+      <td><code>experimental.chat.system.transform</code></td>
+      <td><code>experimental.chat.system.transform</code></td>
+      <td>系统消息级变换</td>
+    </tr>
+    <tr>
+      <td><code>experimental.session.compacting</code></td>
+      <td><code>experimental.session.compacting</code></td>
+      <td>压缩时保留上下文和 todo 状态</td>
+    </tr>
+    <tr>
+      <td><code>experimental.compaction.autocontinue</code></td>
+      <td><code>experimental.compaction.autocontinue</code></td>
+      <td>压缩完成后自动恢复会话</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <p>12 个处理器位于 <code>packages/omo-opencode/src/plugin-interface.ts</code>，另外 2 个 (<code>experimental.session.compacting</code> 和 <code>experimental.compaction.autocontinue</code>) 直接在 <code>create-plugin-module.ts</code> 中注册。</p>
+  </div>
+</section>
+
+<section id="hook-examples">
+  <h2>Hook 实例解析</h2>
+
+  <div class="card-grid">
+    <div class="card" style="border-color:var(--accent);">
+      <span class="tag tag-ultimate">Ultimate</span>
+      <h4>keyword-detector</h4>
+      <p>IntentGate 关键词检测器。在会话首条消息触发，分类用户意图：<code>ultrawork</code> / <code>search</code> / <code>analyze</code> / <code>team</code>。根据分类注入对应的模式专用系统提示，确保 Agent 在正确模式下运行。位于 <code>hooks/keyword-detector/</code>。</p>
+    </div>
+
+    <div class="card" style="border-color:var(--accent);">
+      <span class="tag tag-ultimate">Ultimate</span>
+      <h4>runtime-fallback</h4>
+      <p>当模型调用失败时触发。包含 <strong>first-prompt-watchdog</strong>：子 agent 90 秒无进度 → 触发回退或中止。区分两套独立回退系统：<code>model-fallback</code> (主动，在 chat.params 中) 和 <code>runtime-fallback</code> (被动，在 session.error 中)，二者相互独立。</p>
+    </div>
+
+    <div class="card" style="border-color:var(--accent);">
+      <span class="tag tag-ultimate">Ultimate</span>
+      <h4>hashline-read-enhancer</h4>
+      <p>每个 Read 工具的输出附加 <strong>LINE#ID</strong> 内容哈希标签。哈希字符来自 <code>ZPMQVRWSNKTXJBYH</code>。编辑时通过哈希验证行内容是否变更——过时哈希直接拒绝编辑，消除因文件在读取后被修改而造成的错行错误。</p>
+    </div>
+
+    <div class="card" style="border-color:var(--purple);">
+      <span class="tag tag-both">Both</span>
+      <h4>comment-checker</h4>
+      <p>检测 AI 生成代码异味的模式匹配器。识别 "simply" "obviously" "clearly" 等 AI 写作特征。单行绕过：<code>// @allow</code>；文件级绕过：<code>// comment-checker-disable-file</code>。打包为独立二进制 <code>@code-yeongyu/comment-checker</code>。</p>
+    </div>
+
+    <div class="card" style="border-color:var(--purple);">
+      <span class="tag tag-both">Both</span>
+      <h4>rules-injector</h4>
+      <p>在每次 prompt 中自动注入项目规则。扫描 <code>AGENTS.md</code>、<code>.omo/rules/*.md</code>、<code>.claude/rules/</code>、<code>.cursor/rules/</code>、<code>.github/instructions/</code>、<code>.github/copilot-instructions.md</code> 和 <code>.mdc</code> 文件。采用向上遍历发现机制。</p>
+    </div>
+
+    <div class="card" style="border-color:var(--accent);">
+      <span class="tag tag-ultimate">Ultimate</span>
+      <h4>prometheus-md-only</h4>
+      <p>Prometheus Agent 只允许编辑 <code>.md</code> 文件。在 tool.execute.before 守卫中强制检查：任何非 .md 文件的编辑操作被拒绝。禁止路径：<code>packages/*/src/</code>、<code>package.json</code>、配置文件。</p>
+    </div>
+
+    <div class="card" style="border-color:var(--accent);">
+      <span class="tag tag-ultimate">Ultimate</span>
+      <h4>team-tool-gating</h4>
+      <p>Team Mode 启用时注入的 ToolGuard hook。对 <code>team_*</code> 系列工具执行权限守卫——验证当前会话是否有权创建 / 管理 team、成员是否超出限制、配置是否符合安全边界。</p>
+    </div>
+  </div>
+</section>
+
+<section id="tool-system">
+  <h2>工具系统</h2>
+
+  <h3>常驻工具 (20 个)——始终可用</h3>
+  <table>
+    <tr><th>类别</th><th>工具</th><th>功能</th></tr>
+    <tr><td rowspan="7"><strong>LSP (7)</strong></td><td><code>lsp_diagnostics</code></td><td>获取文件 / 目录的诊断信息</td></tr>
+    <tr><td><code>lsp_goto_definition</code></td><td>跳转到符号定义</td></tr>
+    <tr><td><code>lsp_find_references</code></td><td>查找符号所有引用</td></tr>
+    <tr><td><code>lsp_symbols</code></td><td>文档或工作区范围符号搜索</td></tr>
+    <tr><td><code>lsp_prepare_rename</code></td><td>检查符号是否可重命名</td></tr>
+    <tr><td><code>lsp_rename</code></td><td>工作区范围重命名符号</td></tr>
+    <tr><td><code>lsp_status</code></td><td>列出已配置和活跃的 LSP 服务器</td></tr>
+    <tr><td rowspan="2"><strong>AST (2)</strong></td><td><code>ast_grep_search</code></td><td>25+ 语言的 AST 模式搜索</td></tr>
+    <tr><td><code>ast_grep_replace</code></td><td>AST 模式重写 (树替换)</td></tr>
+    <tr><td rowspan="4"><strong>文件 (4)</strong></td><td><code>grep</code></td><td>正则内容搜索 (60s 超时, 256KB 输出限制)</td></tr>
+    <tr><td><code>glob</code></td><td>文件名模式匹配 (100 文件上限)</td></tr>
+    <tr><td><code>edit</code></td><td>精确字符串替换 (oldString/newString)</td></tr>
+    <tr><td><code>skill_mcp</code></td><td>调用 skill-embedded MCP 工具 / 资源 / 提示</td></tr>
+    <tr><td rowspan="4"><strong>会话 (4)</strong></td><td><code>session_list</code></td><td>列出所有会话 (支持日期过滤)</td></tr>
+    <tr><td><code>session_read</code></td><td>读取会话消息 (含 todo 和 transcript)</td></tr>
+    <tr><td><code>session_search</code></td><td>全文搜索会话消息内容</td></tr>
+    <tr><td><code>session_info</code></td><td>获取会话元数据和统计信息</td></tr>
+    <tr><td rowspan="3"><strong>委派 (3)</strong></td><td><code>task</code></td><td>向 category agent 委派任务</td></tr>
+    <tr><td><code>call_omo_agent</code></td><td>直接调用指定 agent (explore / librarian)</td></tr>
+    <tr><td><code>skill</code></td><td>加载 skill 或执行 slash 命令</td></tr>
+    <tr><td rowspan="2"><strong>后台 (2)</strong></td><td><code>background_output</code></td><td>获取后台任务结果 (阻塞 / 非阻塞)</td></tr>
+    <tr><td><code>background_cancel</code></td><td>取消后台任务 (按 taskId)</td></tr>
+  </table>
+
+  <div class="note">
+    <p>LSP 和 AST-grep 工具通过内置 MCP 服务器提供——<code>lsp</code> MCP (packages/lsp-tools-mcp) 和 <code>ast_grep</code> MCP (packages/ast-grep-mcp)。工具名称通过 OpenCode MCP 命名空间保持不变。</p>
+  </div>
+
+  <h3>条件工具 (19 个)——按配置开关</h3>
+  <table>
+    <tr><th>条件</th><th>数量</th><th>工具</th><th>说明</th></tr>
+    <tr>
+      <td><code>team_mode.enabled</code></td>
+      <td>+12</td>
+      <td><code>team_create</code>, <code>team_delete</code>, <code>team_shutdown_request</code>, <code>team_approve_shutdown</code>, <code>team_reject_shutdown</code>, <code>team_send_message</code>, <code>team_task_create</code>, <code>team_task_list</code>, <code>team_task_update</code>, <code>team_task_get</code>, <code>team_status</code>, <code>team_list</code></td>
+      <td>并行多 agent 协调系统。OFF by default。</td>
+    </tr>
+    <tr>
+      <td><code>experimental.task_system</code></td>
+      <td>+4</td>
+      <td><code>task_create</code>, <code>task_get</code>, <code>task_list</code>, <code>task_update</code></td>
+      <td>独立任务管理系统 (与 team 任务分离)</td>
+    </tr>
+    <tr>
+      <td><code>hashline_edit</code></td>
+      <td>+1</td>
+      <td><code>edit</code> (变体)</td>
+      <td>LINE#ID 哈希锚定编辑。基于读出的哈希验证行内容一致性。</td>
+    </tr>
+    <tr>
+      <td><code>tmux</code> 二进制可用</td>
+      <td>+1</td>
+      <td><code>interactive_bash</code></td>
+      <td>传递 tmux 子命令。允许 Agent 操作 TUI 应用 (vim, htop, pudb)。</td>
+    </tr>
+    <tr>
+      <td>multimodal-looker 未禁用</td>
+      <td>+1</td>
+      <td><code>look_at</code></td>
+      <td>从 PDF / 图片中提取基本信息。快速摘要，非精确阅读。</td>
+    </tr>
+  </table>
+
+  <div class="stats" style="margin-top:20px;">
+    <div class="stat"><div class="num">20</div><div class="label">常驻工具</div></div>
+    <div class="stat"><div class="num">+19</div><div class="label">条件开关</div></div>
+    <div class="stat"><div class="num">39</div><div class="label">最大工具数</div></div>
+  </div>
+</section>
+
+<section id="mcp-system">
+  <h2>三级 MCP 系统</h2>
+  <p>OmO 的 MCP 系统分三层，从内置到兼容到技能嵌入，逐级扩展：</p>
+
+  <table>
+    <tr><th>层级</th><th>来源</th><th>加载器</th><th>机制</th></tr>
+    <tr>
+      <td><strong>1. 内置 MCP</strong></td>
+      <td><code>createBuiltinMcps()</code><br>
+        3 远程 HTTP: websearch (Exa) / context7 (docs) / grep_app (GitHub 搜索)<br>
+        + 2 本地 stdio: lsp (packages/lsp-tools-mcp) / ast_grep (packages/ast-grep-mcp)</td>
+      <td>插件初始化时自动创建</td>
+      <td>运行时常驻，所有会话共享</td>
+    </tr>
+    <tr>
+      <td><strong>2. Claude Code 兼容</strong></td>
+      <td><code>.mcp.json</code> (项目级 + 用户级)</td>
+      <td><code>claude-code-mcp-loader</code></td>
+      <td><code>${VAR}</code> 环境变量展开，受 <code>mcp_env_allowlist</code> 白名单控制</td>
+    </tr>
+    <tr>
+      <td><strong>3. Skill 嵌入式</strong></td>
+      <td>SKILL.md YAML frontmatter</td>
+      <td><code>SkillMcpManager</code> (按会话)</td>
+      <td>stdio + HTTP 传输，OAuth 2.0 + PKCE + DCR step-up，按需启动按需销毁</td>
+    </tr>
+  </table>
+
+  <h3>按会话 MCP 隔离</h3>
+  <p>第三层 MCP 客户端按 <code>${sessionID}:${skillName}:${serverName}</code> 键隔离——同一 skill 在不同会话中不共享 MCP 状态。技能结束时 MCP 服务器自动销毁。</p>
+
+  <div class="highlight-box">
+    <p><strong>设计原则：</strong>MCP 服务器消耗上下文预算。Skill 嵌入式 MCP 按需启动、任务作用域限制、完成后销毁——上下文窗口保持干净。</p>
+  </div>
+</section>
+
+<section id="config-pipeline">
+  <h2>6 阶段配置管道</h2>
+  <p>插件初始化时，配置按 6 阶段依次加载。每个阶段的结果传递给下一阶段：</p>
+
+  <div class="layer-diagram">
+    <div class="layer" style="border-color:var(--accent);">
+      <div class="name" style="color:var(--accent);">阶段 1: provider</div>
+      <div class="desc">模型供应商配置 (Anthropic / OpenAI / Gemini / Copilot 等)</div>
+    </div>
+    <div class="layer" style="border-color:var(--pink);">
+      <div class="name" style="color:var(--pink);">阶段 2: plugin-components</div>
+      <div class="desc">插件核心组件注册 (features, skills, commands)</div>
+    </div>
+    <div class="layer" style="border-color:var(--green);">
+      <div class="name" style="color:var(--green);">阶段 3: agents</div>
+      <div class="desc">Agent 定义、模型绑定、工具权限</div>
+    </div>
+    <div class="layer" style="border-color:var(--orange);">
+      <div class="name" style="color:var(--orange);">阶段 4: tools</div>
+      <div class="desc">工具注册表构建 (含条件开关评估)</div>
+    </div>
+    <div class="layer" style="border-color:var(--purple);">
+      <div class="name" style="color:var(--purple);">阶段 5: MCPs</div>
+      <div class="desc">三级 MCP 系统组装</div>
+    </div>
+    <div class="layer" style="border-color:var(--cyan);">
+      <div class="name" style="color:var(--cyan);">阶段 6: commands</div>
+      <div class="desc">内置 command / slash 命令注册</div>
+    </div>
+  </div>
+
+  <h3>多级配置合并规则</h3>
+  <pre><code>遍历配置 (越近优先级越高):
+  &lt;从 pwd 到 $HOME&gt;/.opencode/oh-my-openagent.json[c]
+        ↓ 合并到
+  用户配置: ~/.config/opencode/oh-my-openagent.json[c]
+        ↓ 回退到
+  默认值 (Zod safeParse 填充省略字段)</code></pre>
+
+  <table>
+    <tr><th>字段类型</th><th>合并策略</th><th>说明</th></tr>
+    <tr>
+      <td><code>agents</code>, <code>categories</code>, <code>claude_code</code></td>
+      <td>深合并</td>
+      <td>防护原型污染。内层嵌套对象递归合并。</td>
+    </tr>
+    <tr>
+      <td><code>disabled_*</code> 数组</td>
+      <td>Set 合并</td>
+      <td>拼接后去重。禁用列表只增不减。</td>
+    </tr>
+    <tr>
+      <td>其他所有字段</td>
+      <td>覆盖替换</td>
+      <td>较近的配置覆盖较远的。基本类型全覆盖。</td>
+    </tr>
+    <tr>
+      <td><code>mcp_env_allowlist</code></td>
+      <td>仅限用户配置</td>
+      <td>安全原因——遍历配置不可扩展环境变量白名单。</td>
+    </tr>
+  </table>
+
+  <p>配置格式：<strong>JSONC</strong> (支持注释和尾逗号)，使用 <strong>Zod v4</strong> 验证，字段名遵循 <strong>snake_case</strong>。迁移通过 <code>migrateConfigFile()</code> 处理——基于 <code>_migrations</code> 追踪的幂等迁移 + 时间戳备份。</p>
+</section>
+
+<section id="config-example">
+  <h2>配置示例</h2>
+  <p>完整的 <code>.opencode/oh-my-openagent.jsonc</code> 示例：</p>
+
+  <pre><code>{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+
+  // Agent 配置
+  "agents": {
+    "sisyphus": {
+      "model": "claude-opus-4-7",
+      "temperature": 0.3,
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 32000
+      }
+    },
+    "hephaestus": {
+      "model": "gpt-5.5",
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 16000
+      }
+    }
+  },
+
+  // Category 覆盖
+  "categories": {
+    "ultrabrain": {
+      "default_model": "gpt-5.5-xhigh"
+    },
+    "visual-engineering": {
+      "default_model": "gemini-3.1-pro"
+    }
+  },
+
+  // Team Mode (OFF by default)
+  "team_mode": {
+    "enabled": true,
+    "max_parallel_members": 4,
+    "max_members": 8,
+    "max_messages_per_run": 10000,
+    "max_wall_clock_minutes": 120,
+    "max_member_turns": 500,
+    "tmux_visualization": false,
+    "message_payload_max_bytes": 32768,
+    "recipient_unread_max_bytes": 262144,
+    "mailbox_poll_interval_ms": 3000
+  },
+
+  // 后台任务
+  "background_task": {
+    "modelConcurrency": 5,
+    "providerConcurrency": 5
+  },
+
+  // 禁用项
+  "disabled_hooks": [],
+  "disabled_tools": [],
+  "disabled_skills": [],
+
+  // 模型回退链
+  "fallback_models": {
+    "sisyphus": ["claude-sonnet-4-6", "gpt-5.5"],
+    "hephaestus": ["claude-opus-4-7"]
+  }
+}</code></pre>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="level-2.5-model-matching.html">← 上一层：模型匹配</a>
+  <a class="next" href="level-4-architecture.html">下一层：架构深度 →</a>
+</div>
+
+</main>
+</body>
+</html>
