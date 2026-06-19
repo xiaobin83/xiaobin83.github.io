@@ -295,6 +295,15 @@ team_create</code></pre>
 
 <section id="tips">
   <h2>实用技巧</h2>
+
+  <div class="highlight-box" style="margin-bottom:20px;">
+    <p><strong>记住一个原则：你只管说目标，Sisyphus 搞定一切。</strong><br>
+    不需要写 <code>task()</code>、不需要选模型、不需要配参数。<br>
+    你输入的是自然语言——"修这个 bug"、"加个暗色模式"、"审查这段代码"。<br>
+    Sisyphus 自动判断复杂度、选 Category、加载 Skill、委派子 agent。<br>
+    <span style="font-size:12px;color:var(--text-muted);">下面列出的 <code>task()</code>、<code>load_skills</code> 等是 Sisyphus 的内部机制——了解即可，你不需要手写。</span></p>
+  </div>
+
   <div class="card-grid">
 
     <div class="card">
@@ -309,31 +318,28 @@ team_create</code></pre>
 
     <div class="card">
       <h4>后台并行</h4>
-      <p>使用 <code>task(run_in_background=true)</code> 同时启动多个 agent。上限按 provider/model 组合独立计算。</p>
+      <p>Sisyphus 会自动在后台并行启动多个子 agent 同时工作——搜索代码、查文档、写代码同步进行。你不需要手动操作。</p>
+      <p style="margin-top:6px;font-size:12px;color:var(--text-muted);">内部机制：Sisyphus 通过 <code>task(run_in_background=true)</code> 并行委派，上限按 provider/model 组合独立计算。</p>
     </div>
 
     <div class="card">
       <h4>Skill — 给 Agent 装专业知识</h4>
-      <p><strong>Skill 是什么？</strong> 一套预设的领域知识 + 工具 + 工作流。Agent 默认是通用型的，加载 Skill 后变专家。</p>
-      <p style="margin-top:8px;"><strong>技能存在哪里？</strong> 项目级 <code>.opencode/skills/&lt;name&gt;/SKILL.md</code>，用户级 <code>~/.config/opencode/skills/&lt;name&gt;/SKILL.md</code>，还有内置的（如 <code>frontend-ui-ux</code>、<code>git-master</code>、<code>playwright</code>）。</p>
-      <p style="margin-top:8px;"><strong>怎么用？</strong> 通过 <code>task()</code> 的 <code>load_skills</code> 参数：</p>
-      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>task(
-  category="visual-engineering",
-  load_skills=["frontend-ui-ux"],
-  prompt="设计一个响应式导航栏"
-)</code></pre>
-      <p style="margin-top:6px;">多个 Skill 可以同时加载：<code>load_skills=["git-master", "playwright"]</code>。</p>
+      <p><strong>Skill 是什么？</strong> 一套预设的领域知识 + 工具 + 工作流。加载后 Agent 从通用型变专家。</p>
+      <p style="margin-top:8px;"><strong>你怎么用？</strong> 在对话框里直接说：</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>用 frontend skill 帮我设计一个响应式导航栏</code></pre>
+      <p style="margin-top:6px;">或者更直接：<code>加载 playwright skill，帮我写 e2e 测试</code></p>
+      <p style="margin-top:8px;"><strong>Skill 存在哪里？</strong> 项目 <code>.opencode/skills/&lt;name&gt;/SKILL.md</code>、用户 <code>~/.config/opencode/skills/</code>、以及内置（<code>frontend-ui-ux</code>、<code>git-master</code>、<code>playwright</code> 等）。</p>
+      <p style="margin-top:8px;font-size:12px;color:var(--text-muted);">内部机制：Sisyphus 通过 <code>task(category="...", load_skills=["..."])</code> 把 skill 注入子 agent 的 prompt——你不需要手动写这个。</p>
     </div>
 
     <div class="card">
       <h4>Category 路由 — 无需指定模型</h4>
-      <p>用 <code>task(category="ultrabrain")</code> 代替指定具体模型。系统自动选最优模型，未来换模型也不用改代码。</p>
-      <p style="margin-top:8px;"><strong>Category + Skill 组合：</strong>Category 决定用哪个模型，Skill 决定装什么知识：</p>
-      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>// Category 选模型，Skill 装知识
-task(category="deep", load_skills=["security-research"])
-
-// 快速修复 + git 安全操作
-task(category="quick", load_skills=["git-master"])</code></pre>
+      <p>你不需要告诉 Sisyphus 用哪个模型。它根据任务类型自动选择。</p>
+      <p style="margin-top:8px;"><strong>你怎么说：</strong></p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>帮我重构这个认证模块（复杂逻辑 → 自动走 ultrabrain）
+帮我修一下这个 typo（简单任务 → 自动走 quick）
+帮我还原刚才的提交（git 操作 → 自动加载 git-master skill）</code></pre>
+      <p style="margin-top:8px;font-size:12px;color:var(--text-muted);">内部机制：Sisyphus 通过 <code>task(category="ultrabrain")</code> 把任务路由到最优模型。Category + Skill 自动组合——你只说目标，系统搞定技术细节。</p>
     </div>
 
     <div class="card">
