@@ -3,149 +3,101 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oh My OpenAgent — 多模型 AI 开发团队，装好即用</title>
+<title>Oh My OpenAgent — 新手上路</title>
 <link rel="stylesheet" href="style.css">
-<style>
-  /* Landing page overrides: no sidebar, block layout */
-  body { display: block; }
-  nav { display: none; }
-  main { margin-left: 0; }
-
-  /* Top navbar */
-  .top-nav {
-    background: var(--bg-secondary); border-bottom: 1px solid var(--border);
-    padding: 0 24px; position: sticky; top: 0; z-index: 50;
-  }
-  .top-nav-inner {
-    max-width: 960px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;
-    height: 52px;
-  }
-  .top-logo { font-size: 16px; font-weight: 700; color: var(--accent-secondary); }
-  .top-links { display: flex; gap: 4px; }
-  .top-links a { padding: 6px 14px; border-radius: 6px; font-size: 13px; color: var(--text-muted); text-decoration: none; transition: all 0.15s; }
-  .top-links a:hover, .top-links a.active { background: var(--bg-tertiary); color: var(--accent-secondary); }
-
-  /* Landing main */
-  .landing-main { max-width: 800px; margin: 0 auto; padding: 60px 24px; }
-
-  /* Hero */
-  .hero { text-align: center; margin-bottom: 48px; }
-  .hero h1 { font-size: 32px; margin-bottom: 12px; }
-  .hero p { font-size: 18px; color: var(--text-muted); max-width: 600px; margin: 0 auto 20px; }
-
-  /* Quick start card */
-  .quickstart-card { background: var(--bg-secondary); border: 1px solid var(--accent); border-radius: 12px; padding: 28px 32px; margin-bottom: 40px; }
-  .quickstart-card h3 { margin: 0 0 12px; }
-
-  /* Landing cards */
-  .landing-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
-  .landing-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 24px; text-align: center; }
-  .landing-card h4 { margin: 0 0 10px; font-size: 17px; }
-  .landing-card p { font-size: 13px; margin-bottom: 16px; }
-  .landing-card .btn { display: inline-block; padding: 8px 20px; background: var(--accent); color: #fff; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; }
-  .landing-card .btn:hover { background: var(--accent-secondary); text-decoration: none; }
-
-  /* Footer */
-  .footer { text-align: center; padding: 40px 24px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
-  .footer a { margin: 0 8px; }
-
-  /* Responsive */
-  @media (max-width: 700px) {
-    .landing-cards { grid-template-columns: 1fr; }
-    .top-links { gap: 2px; }
-    .top-links a { padding: 4px 8px; font-size: 11px; }
-    .hero h1 { font-size: 24px; }
-  }
-</style>
 </head>
 <body>
 
-<header class="top-nav">
-  <div class="top-nav-inner">
-    <span class="top-logo">Oh My OpenAgent</span>
-    <nav class="top-links">
-      <a href="index.html" class="active">新手上路</a>
-      <a href="best-practice.html">最佳实践</a>
-      <a href="guide.html">项目导读</a>
-      <a href="level-1-basics.html">深入阅读</a>
-    </nav>
-  </div>
-</header>
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">v4.10.0</div>
 
-<main class="landing-main">
-
-  <section class="hero">
-    <h1>Oh My OpenAgent — 多模型 AI 开发团队，装好即用</h1>
-    <p>把 OpenCode 从单个 AI 变成一个协调的开发团队。不用选模型，不用说术语，只管说你要什么。</p>
-  </section>
-
-  <div class="quickstart-card">
-    <h3>快速开始</h3>
-    <pre><code>bunx oh-my-openagent install
-# 装完后，打开 OpenCode，输入：
-ultrawork</code></pre>
+  <div class="nav-section">
+    <div class="nav-title">新手上路</div>
+    <ul>
+      <li><a class="current" href="index.html">首页</a></li>
+      <li><a href="best-practice.html">最佳实践</a></li>
+      <li><a href="guide.html">项目导读</a></li>
+    </ul>
   </div>
 
-  <h2 style="text-align:center; margin-bottom: 24px;">接下来我该做什么？</h2>
+  <div class="nav-section">
+    <div class="nav-title">深入阅读</div>
+    <ul>
+      <li><a href="level-1-basics.html">第一层 &middot; 基本概念</a></li>
+      <li><a href="level-2-agents.html">第二层 &middot; Agent 系统</a></li>
+      <li><a href="level-2.5-model-matching.html">第二层半 &middot; 模型匹配</a></li>
+      <li><a href="level-3-hooks.html">第三层 &middot; Hook 与工具</a></li>
+      <li><a href="level-4-architecture.html">第四层 &middot; 架构深度</a></li>
+    </ul>
+  </div>
+</nav>
 
-  <div class="landing-cards">
-    <div class="landing-card">
+<main>
+
+<section id="hero">
+  <h1>Oh My OpenAgent</h1>
+  <p style="font-size:18px;color:var(--text);">多模型 AI 开发团队，装好即用</p>
+  <p>把 OpenCode 从单个 AI 变成一个协调的开发团队。不用选模型，不用说术语，只管说你要什么。</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">11</div><div class="label">Agents</div></div>
+    <div class="stat"><div class="num">39</div><div class="label">Tools</div></div>
+    <div class="stat"><div class="num">61</div><div class="label">Hooks</div></div>
+    <div class="stat"><div class="num">38</div><div class="label">Packages</div></div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <h2>快速开始</h2>
+  <div class="highlight-box">
+    <p><strong>安装 OmO：</strong></p>
+    <pre><code>bunx oh-my-openagent install</code></pre>
+    <p>装完后，打开 OpenCode，输入：</p>
+    <pre><code>ultrawork</code></pre>
+  </div>
+</section>
+
+<section id="next-steps">
+  <h2>接下来我该做什么？</h2>
+  <div class="card-grid">
+    <div class="card">
       <h4>我是新用户</h4>
       <p>首次使用、如何选择 Agent、实用技巧</p>
-      <a class="btn" href="best-practice.html">看最佳实践</a>
+      <p><a href="best-practice.html">看最佳实践 &rarr;</a></p>
     </div>
-    <div class="landing-card">
+    <div class="card">
       <h4>我想了解全貌</h4>
       <p>设计理念、整体架构、功能一览</p>
-      <a class="btn" href="guide.html">看项目导读</a>
+      <p><a href="guide.html">看项目导读 &rarr;</a></p>
     </div>
-    <div class="landing-card">
+    <div class="card">
       <h4>我想深入技术</h4>
       <p>Agent 体系、Hook 机制、架构深度</p>
-      <a class="btn" href="level-1-basics.html">看深度阅读</a>
+      <p><a href="level-1-basics.html">看深入阅读 &rarr;</a></p>
     </div>
   </div>
+</section>
 
-  <div class="stats" style="justify-content: center;">
-    <div class="stat">
-      <div class="num">11</div>
-      <div class="label">Agents</div>
-    </div>
-    <div class="stat">
-      <div class="num">39</div>
-      <div class="label">Tools</div>
-    </div>
-    <div class="stat">
-      <div class="num">61</div>
-      <div class="label">Hooks</div>
-    </div>
-    <div class="stat">
-      <div class="num">38</div>
-      <div class="label">Packages</div>
-    </div>
-  </div>
-
-  <p style="text-align:center; font-size: 14px;">
+<section id="links">
+  <h2>相关链接</h2>
+  <p>
     <a href="https://github.com/code-yeongyu/oh-my-openagent">GitHub</a>
-    <span style="color: var(--text-muted); margin: 0 12px;">&middot;</span>
+    &middot;
     <a href="https://omo.dev">omo.dev</a>
-    <span style="color: var(--text-muted); margin: 0 12px;">&middot;</span>
+    &middot;
     <a href="https://discord.gg/ta9gwy6PbS">Discord</a>
-    <span style="color: var(--text-muted); margin: 0 12px;">&middot;</span>
+    &middot;
     <a href="https://github.com/code-yeongyu/lazycodex">LazyCodex</a>
   </p>
+</section>
+
+<div class="next-section">
+  <span></span>
+  <a class="next" href="best-practice.html">最佳实践 &rarr;</a>
+</div>
 
 </main>
-
-<footer class="footer">
-  <div>
-    <a href="index.html">新手上路</a>
-    <a href="best-practice.html">最佳实践</a>
-    <a href="guide.html">项目导读</a>
-    <a href="level-1-basics.html">深入阅读</a>
-  </div>
-  <div style="margin-top: 12px;">Oh My OpenAgent &middot; 把 OpenCode 从单个 AI 变成一个协调的开发团队</div>
-</footer>
-
 </body>
 </html>
