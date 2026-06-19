@@ -9,24 +9,30 @@
 <body>
 
 <nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
   <div class="logo">Oh My OpenAgent</div>
   <div class="version">由浅入深 · 第二层半</div>
 
   <div class="nav-section">
     <div class="nav-title">导航</div>
-    <ul>
-      <li class="nav-back"><a href="guide.html">← 返回导读</a></li>
-      <li class="nav-back"><a href="level-1-basics.html">← 第一层</a></li>
-      <li class="nav-back"><a href="level-2-agents.html">← 第二层</a></li>
+    <ul class="nav-back">
+      <li><a href="guide.html">← 返回导读</a></li>
     </ul>
   </div>
-
   <div class="nav-section">
-    <div class="nav-title">深度阅读</div>
+    <div class="nav-title">新手上路</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="best-practice.html">最佳实践</a></li>
+      <li><a href="guide.html">项目导读</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <div class="nav-title">深入阅读</div>
     <ul>
       <li><a href="level-1-basics.html">第一层 · 基本概念</a></li>
       <li><a href="level-2-agents.html">第二层 · Agent 系统</a></li>
-      <li><a class="current" href="level-2.5-model-matching.html">第二层半 · 模型匹配深度专题</a></li>
+      <li><a class="current" href="level-2.5-model-matching.html">第二层半 · 模型匹配</a></li>
       <li><a href="level-3-hooks.html">第三层 · Hook 与工具</a></li>
       <li><a href="level-4-architecture.html">第四层 · 架构深度</a></li>
     </ul>

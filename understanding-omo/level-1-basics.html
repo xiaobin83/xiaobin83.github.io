@@ -9,6 +9,7 @@
 <body>
 
 <nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
   <div class="logo">Oh My OpenAgent</div>
   <div class="version">由浅入深 · 第一层</div>
 
@@ -18,9 +19,16 @@
       <li class="nav-back"><a href="guide.html">← 返回导读</a></li>
     </ul>
   </div>
-
   <div class="nav-section">
-    <div class="nav-title">深度阅读</div>
+    <div class="nav-title">新手上路</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="best-practice.html">最佳实践</a></li>
+      <li><a href="guide.html">项目导读</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <div class="nav-title">深入阅读</div>
     <ul>
       <li><a class="current" href="level-1-basics.html">第一层 · 基本概念</a></li>
       <li><a href="level-2-agents.html">第二层 · Agent 系统</a></li>
@@ -29,26 +37,13 @@
       <li><a href="level-4-architecture.html">第四层 · 架构深度</a></li>
     </ul>
   </div>
-
-  <div class="nav-section">
-    <div class="nav-title">本页目录</div>
-    <ul>
-      <li><a href="#what-is">OmO 是什么</a></li>
-      <li><a href="#why">为什么需要 OmO</a></li>
-      <li><a href="#philosophy">核心哲学</a></li>
-      <li><a href="#modes">两种工作模式</a></li>
-      <li><a href="#intentgate">IntentGate</a></li>
-      <li><a href="#editions">两版发行</a></li>
-      <li><a href="#quickstart">快速开始</a></li>
-    </ul>
-  </div>
 </nav>
 
 <main>
 
 <section id="what-is">
   <div class="breadcrumb">
-    <a href="guide.html">导读</a> → <span>第一层：基本概念</span>
+    <a href="guide.html">项目导读</a> → <span>第一层：基本概念</span>
   </div>
 
   <h1>OmO 是什么</h1>
@@ -253,8 +248,8 @@ ulw 重构用户认证模块，改用 JWT</code></pre>
 
 <div style="padding:24px 64px;max-width:960px;">
   <div class="next-section">
-    <span></span>
-    <a class="next" href="level-2-agents.html">下一层：Agent 系统 →</a>
+    <a class="prev" href="guide.html">← 项目导读</a>
+    <a class="next" href="level-2-agents.html">第二层：Agent 系统 →</a>
   </div>
 </div>
 

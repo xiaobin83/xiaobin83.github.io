@@ -115,10 +115,81 @@ li { color: var(--text-muted); margin-bottom: 6px; }
 .breadcrumb a:hover { color: var(--accent); }
 .breadcrumb span { color: var(--accent-secondary); }
 
+.menu-toggle { display: none; }
+
 /* Responsive */
-@media (max-width: 900px) {
+@media (max-width: 900px) and (min-width: 769px) {
   nav { display: none; }
   main { margin-left: 0; }
-  section { padding: 32px 24px; }
-  .stats { gap: 12px; }
+  section { padding: 40px 32px; }
 }
+
+/* Mobile: sidebar as top navbar */
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  
+  /* Transform sidebar into top navbar */
+  nav {
+    position: relative; width: 100%; height: auto; max-height: 52px;
+    overflow: hidden; padding: 12px 16px; display: flex;
+    align-items: center; justify-content: space-between; border-right: none;
+    border-bottom: 1px solid var(--border); transition: max-height 0.3s ease;
+  }
+  nav.open { max-height: 100vh; overflow-y: auto; flex-direction: column; align-items: flex-start; }
+  
+  nav .logo { font-size: 15px; margin-bottom: 0; flex-shrink: 0; }
+  nav .version { display: none; }
+  
+  /* Hamburger toggle */
+  .menu-toggle { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; z-index: 101; }
+  .menu-toggle span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: all 0.2s; }
+  
+  /* Hide nav sections by default, show when nav is open */
+  nav .nav-section { display: none; margin-top: 16px; width: 100%; }
+  nav.open .nav-section { display: block; }
+  nav.open .version { display: block; margin-top: 6px; }
+  
+  /* Main content */
+  main { margin-left: 0; width: 100%; }
+  section { padding: 24px 16px; }
+  
+  /* Typography scaling */
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  h3 { font-size: 17px; }
+  h4 { font-size: 14px; }
+  
+  /* Tables: horizontal scroll */
+  table { display: block; overflow-x: auto; white-space: nowrap; font-size: 12px; }
+  th, td { padding: 8px 10px; }
+  
+  /* Card grid: single column */
+  .card-grid { grid-template-columns: 1fr; gap: 12px; }
+  
+  /* Stats: wrap tighter */
+  .stats { gap: 10px; }
+  .stat { min-width: 0; flex: 1 1 auto; padding: 12px 14px; }
+  .stat .num { font-size: 22px; }
+  
+  /* Code blocks: smaller padding */
+  pre { padding: 12px 14px; font-size: 11px; }
+  code { font-size: 11px; }
+  
+  /* Bottom nav: stack vertically */
+  .next-section { flex-direction: column; gap: 10px; text-align: center; padding: 16px; }
+  .next-section a { font-size: 14px; }
+  
+  /* Layer diagram: smaller */
+  .layer { padding: 12px 14px; }
+  
+  /* Highlight box: smaller padding */
+  .highlight-box { padding: 14px 16px; }
+  
+  /* Breadcrumb: smaller */
+  .breadcrumb { font-size: 11px; }
+}
+
+/*
+  NOTE: Each HTML page's <nav> needs this before its children:
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+*/
