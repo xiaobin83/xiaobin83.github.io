@@ -67,6 +67,13 @@
   <pre><code>bunx oh-my-openagent install</code></pre>
   <p>安装向导会检测 OpenCode 版本、配置权限、复制 agent 定义和 skill 文件。完成后重启 OpenCode。</p>
 
+  <div class="highlight-box">
+    <p><strong>没有推荐的模型订阅？没关系。</strong><br>
+    如果安装时跳过了模型配置，或者你只有部分 provider（比如只有 OpenCode Go 或某个免费 API），直接在 OpenCode 里告诉 Sisyphus：</p>
+    <pre style="margin:10px 0;"><code>我没有 Claude 和 GPT 的订阅。帮我检查 opencode models，然后用我可用的模型重新配置所有 agent。</code></pre>
+    <p>Sisyphus 会自动运行 <code>opencode models</code> 查看你的可用模型，然后按 Agent 的回落链（fallback chain）给每个 Agent 分配合适的模型——不需要手动编辑 JSON 配置。</p>
+  </div>
+
   <h3>Step 2: 运行第一个任务</h3>
   <p>启动 OpenCode，在输入框里直接打：</p>
   <pre><code>ultrawork 帮我给项目的 README.md 加一个安装说明章节</code></pre>
