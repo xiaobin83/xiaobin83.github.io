@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>最佳实践 — Oh My OpenAgent 快速参考</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">Oh My OpenAgent</div>
+  <div class="version">最佳实践</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="guide.html">&larr; 返回导读</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">深度阅读</div>
+    <ul>
+      <li><a href="level-1-basics.html">第一层 &middot; 基本概念</a></li>
+      <li><a href="level-2-agents.html">第二层 &middot; Agent 系统</a></li>
+      <li><a href="level-2.5-model-matching.html">第二层半 &middot; 模型匹配</a></li>
+      <li><a href="level-3-hooks.html">第三层 &middot; Hook 与工具</a></li>
+      <li><a href="level-4-architecture.html">第四层 &middot; 架构深度</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#first-time">首次使用</a></li>
+      <li><a href="#agent-choosing">什么情况用哪个 Agent</a></li>
+      <li><a href="#decision-flow">决策流程</a></li>
+      <li><a href="#common-patterns">常见使用模式</a></li>
+      <li><a href="#tips">实用技巧</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="first-time">
+  <div class="breadcrumb">
+    <a href="guide.html">导读</a> &rarr; <span>最佳实践</span>
+  </div>
+
+  <h1>最佳实践 &amp; 快速参考</h1>
+  <p>刚装完 OmO 不知道从哪开始？这份指南带你走完第一个任务，然后告诉你每种场景用什么工具最顺手。</p>
+
+  <h2>首次使用</h2>
+
+  <h3>Step 1: 安装</h3>
+  <pre><code>bunx oh-my-openagent install</code></pre>
+  <p>安装向导会检测 OpenCode 版本、配置权限、复制 agent 定义和 skill 文件。完成后重启 OpenCode。</p>
+
+  <h3>Step 2: 运行第一个任务</h3>
+  <p>启动 OpenCode，在输入框里直接打：</p>
+  <pre><code>ultrawork 帮我给项目的 README.md 加一个安装说明章节</code></pre>
+  <p>对，就这一句话。OmO 的 <strong>IntentGate</strong> 会自动识别你的意图是 ultrawork 模式，激活 Sisyphus 编排器做规划、委派和执行。不需要选 agent、不需要配模型、不需要写提示词。</p>
+
+  <h3>Step 3: 了解 Agent 面板</h3>
+  <p>OpenCode 的 agent 选择面板（通常在输入框上方）会列出所有可用的 Agent：</p>
+  <table>
+    <tr><th>Agent</th><th>按什么键</th><th>做什么</th></tr>
+    <tr><td><strong>Sisyphus</strong></td><td>默认 / Tab</td><td>主编排器。自动规划、委派、执行。80% 的场景用它。</td></tr>
+    <tr><td><strong>Hephaestus</strong></td><td>Tab 切换</td><td>自主深度工作。给目标不给配方，自己搞。</td></tr>
+    <tr><td><strong>Prometheus</strong></td><td>Tab 切换</td><td>战略规划。像工程师一样访谈你，然后出计划。</td></tr>
+    <tr><td><strong>Atlas</strong></td><td>Tab 切换</td><td>TODO 编排器。按计划逐项执行，<code>/start-work</code> 激活。</td></tr>
+    <tr><td><strong>Oracle</strong></td><td>Tab 切换</td><td>只读顾问。不改代码，只给建议。</td></tr>
+    <tr><td><strong>Explore</strong></td><td>Tab 切换</td><td>快速代码库搜索。grep 一把梭。</td></tr>
+    <tr><td><strong>Librarian</strong></td><td>Tab 切换</td><td>文档 / 开源代码研究。深度搜索。</td></tr>
+    <tr><td><strong>Multimodal Looker</strong></td><td>Tab 切换</td><td>看图片、PDF、图表的。</td></tr>
+    <tr><td><strong>Metis</strong></td><td>Tab 切换</td><td>规划顾问。在计划定稿前找漏洞。</td></tr>
+    <tr><td><strong>Momus</strong></td><td>Tab 切换</td><td>计划审查。验证可执行性。</td></tr>
+    <tr><td><strong>Sisyphus-Junior</strong></td><td>自动触发</td><td>Category 衍生执行器。由 Sisyphus 自动委派。</td></tr>
+  </table>
+  <p>提示：按 <strong>Tab</strong> 键可以快速在 agent 之间切换。大部分时间你只需要 Sisyphus，其他 agent 会在需要时被自动调用。</p>
+
+  <h3>Step 4: 第一个真实任务</h3>
+  <p>假设你正在开发一个 React 项目，想加一个暗色模式切换：</p>
+  <ol>
+    <li>在 OpenCode 输入 <code>ulw add dark mode toggle to my React app</code>，回车</li>
+    <li>Sisyphus 分析请求，激活 ultrawork 模式</li>
+    <li>它会自动：读取项目结构 &rarr; 判断现有样式方案 &rarr; 创建 Context + Hook + Toggle 组件 &rarr; 修改入口文件 &rarr; 验证不破坏已有 UI</li>
+    <li>过程中你不需要做任何事。如果 agent 问问题，回答就行</li>
+    <li>完成后 agent 会展示变更摘要。用 <code>/diff</code> 审查变更，满意了让它提交</li>
+  </ol>
+  <p>整个过程可能是 2&ndash;5 分钟，取决于项目复杂度。你只需要说一句话。</p>
+</section>
+
+<section id="agent-choosing">
+  <h2>什么情况用哪个 Agent</h2>
+  <p>不是所有任务都需要思考"用哪个 agent"&mdash;Sisyphus 默认会帮你做选择。但了解每个 agent 的强项能让你在复杂场景下更精准地委派。</p>
+  <table>
+    <tr><th>场景</th><th>推荐 Agent</th><th>操作方式</th><th>原因</th></tr>
+    <tr>
+      <td>日常开发任务</td>
+      <td>Sisyphus</td>
+      <td>默认，直接对话</td>
+      <td>主编排器，自动规划和委派</td>
+    </tr>
+    <tr>
+      <td>复杂但懒得解释</td>
+      <td>Sisyphus</td>
+      <td>输入 <code>ulw</code> 或 <code>ultrawork</code></td>
+      <td>激活 ultrawork 模式，agent 自行探索</td>
+    </tr>
+    <tr>
+      <td>复杂且需要精确规划</td>
+      <td>Prometheus &rarr; Atlas</td>
+      <td><code>@plan "任务描述"</code> &rarr; 审查 &rarr; <code>/start-work</code></td>
+      <td>Prometheus 访谈规划，Atlas 逐步执行</td>
+    </tr>
+    <tr>
+      <td>深度架构推理</td>
+      <td>Hephaestus</td>
+      <td>Tab 切换到 Hephaestus</td>
+      <td>GPT-5.5 自主深度推理</td>
+    </tr>
+    <tr>
+      <td>需要架构建议（不改代码）</td>
+      <td>Oracle</td>
+      <td><code>@oracle 你的问题</code></td>
+      <td>只读高智商顾问</td>
+    </tr>
+    <tr>
+      <td>查找代码 / 文档</td>
+      <td>Explore / Librarian</td>
+      <td><code>@explore 找...</code> / <code>@librarian 查...</code></td>
+      <td>快速 grep / 文档搜索</td>
+    </tr>
+    <tr>
+      <td>多成员并行协作</td>
+      <td>Team Mode</td>
+      <td>启用 <code>team_mode</code>，用 <code>team_create</code></td>
+      <td>并行多 agent 系统</td>
+    </tr>
+    <tr>
+      <td>快速修复（typo / 单文件）</td>
+      <td>Sisyphus</td>
+      <td>直接说明</td>
+      <td>无需规划，直接执行</td>
+    </tr>
+    <tr>
+      <td>安全审计</td>
+      <td>Sisyphus + skill</td>
+      <td><code>ulw security-research</code></td>
+      <td>3 个漏洞猎人 + 2 个 PoC 工程师并行</td>
+    </tr>
+  </table>
+</section>
+
+<section id="decision-flow">
+  <h2>决策流程</h2>
+  <p>不知道怎么选？按这个流程走：</p>
+
+  <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:28px 32px;margin-bottom:24px;">
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <span style="background:var(--accent);color:var(--bg);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">1</span>
+        <div>
+          <strong style="color:var(--text);font-size:15px;">任务简单吗？（改一个 typo、调个样式、加个注释）</strong>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">&rarr; <strong>是</strong>：直接跟 <strong>Sisyphus</strong> 说，不需要任何特殊操作</div>
+          <div style="color:var(--text-muted);font-size:13px;">&rarr; <strong>否</strong>：往下走</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;padding-left:40px;border-left:2px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <span style="background:var(--orange);color:var(--bg);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">2</span>
+        <div>
+          <strong style="color:var(--text);font-size:15px;">懒得写详细需求？</strong>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">&rarr; <strong>是</strong>：输入 <code>ulw</code> 或 <code>ultrawork</code> 开头，只说一句话。Agent 自己探索代码库、自己规划、自己实现。</div>
+          <div style="color:var(--text-muted);font-size:13px;">&rarr; <strong>否</strong>：往下走</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;padding-left:40px;border-left:2px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <span style="background:var(--green);color:var(--bg);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">3</span>
+        <div>
+          <strong style="color:var(--text);font-size:15px;">需要精确、可验证的方案？</strong>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">&rarr; <strong>是</strong>：<code>@plan "任务描述"</code> &rarr; <strong>Prometheus</strong> 会像真正的工程师一样提问访谈，生成详细计划 &rarr; 你审查计划 &rarr; <code>/start-work</code> 开始执行。</div>
+          <div style="color:var(--text-muted);font-size:13px;">&rarr; <strong>否</strong>：往下走</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;padding-left:40px;border-left:2px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <span style="background:var(--purple);color:var(--bg);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">4</span>
+        <div>
+          <strong style="color:var(--text);font-size:15px;">需要 GPT 风格的深度推理？</strong>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">&rarr; <strong>是</strong>：按 <strong>Tab</strong> 切换到 <strong>Hephaestus</strong>。给他目标，不给他步骤。</div>
+          <div style="color:var(--text-muted);font-size:13px;">&rarr; <strong>否</strong>：往下走</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;padding-left:40px;border-left:2px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <span style="background:var(--pink);color:var(--bg);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">5</span>
+        <div>
+          <strong style="color:var(--text);font-size:15px;">只是问问题，不改代码？</strong>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">&rarr; <strong>是</strong>：<code>@oracle 你的问题</code>。Oracle 只读不改，纯粹当顾问。</div>
+          <div style="color:var(--text-muted);font-size:13px;">&rarr; <strong>否</strong>：往下走</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding-left:40px;border-left:2px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <span style="background:var(--cyan);color:var(--bg);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">6</span>
+        <div>
+          <strong style="color:var(--text);font-size:15px;">需要多人并行协作？</strong>
+          <div style="color:var(--text-muted);font-size:13px;margin-top:4px;">&rarr; 配置 <code>team_mode.enabled: true</code> &rarr; 重启 &rarr; <code>team_create</code> 定义团队。</div>
+          <div style="color:var(--text-muted);font-size:13px;">&rarr; <strong>以上都不适用？直接用 Sisyphus 说人话就对了。</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="common-patterns">
+  <h2>常见使用模式</h2>
+  <div class="card-grid">
+
+    <div class="card">
+      <span class="tag tag-ultimate">日常</span>
+      <h4>启动新功能</h4>
+      <p>描述想要的特性，agent 自动探索、实现、验证。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>ulw add dark mode toggle</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-ultimate">日常</span>
+      <h4>修复 Bug</h4>
+      <p>描述症状，agent 定位问题、修复、跑测试。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>ulw fix the login redirect loop</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-ultimate">重构</span>
+      <h4>重构代码</h4>
+      <p>Prometheus 先规划，审查后再执行。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>@plan "refactor auth module"
+/start-work</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-ultimate">审查</span>
+      <h4>代码审查</h4>
+      <p>Oracle 分析架构并给出建议。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>@oracle review this design</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-both">搜索</span>
+      <h4>查找模式</h4>
+      <p>Explore 快速 grep 代码库。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>@explore find auth impl in src/</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-both">研究</span>
+      <h4>研究最佳实践</h4>
+      <p>Librarian 搜索文档和开源代码。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>@librarian JWT auth in Express?</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-ultimate">团队</span>
+      <h4>启动 Team Mode</h4>
+      <p>配置 team_mode，重启，创建团队。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>team_mode.enabled: true
+team_create</code></pre>
+    </div>
+
+    <div class="card">
+      <span class="tag tag-ultimate">安全</span>
+      <h4>安全审计</h4>
+      <p>启动 3+2 安全审查团队。</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>ulw security-research</code></pre>
+    </div>
+
+  </div>
+</section>
+
+<section id="tips">
+  <h2>实用技巧</h2>
+  <div class="card-grid">
+
+    <div class="card">
+      <h4>TODO 强制执行</h4>
+      <p>Agent 偷懒或跑偏时，系统自动推送 <code>&lt;system-reminder&gt;</code> 把它拉回来。不需要手动催促。</p>
+    </div>
+
+    <div class="card">
+      <h4>会话恢复</h4>
+      <p>会话断了？打开新会话，输入 <code>/start-work</code> 就能恢复。进度、上下文、todo 都不会丢。</p>
+    </div>
+
+    <div class="card">
+      <h4>后台并行</h4>
+      <p>使用 <code>task(run_in_background=true)</code> 同时启动多个 agent。上限按 provider/model 组合独立计算。</p>
+    </div>
+
+    <div class="card">
+      <h4>Skill 组合</h4>
+      <p>用 <code>load_skills=["frontend-ui-ux"]</code> 给 agent 注入专业技能。Skill 可以叠加，agent 会按需加载。</p>
+    </div>
+
+    <div class="card">
+      <h4>Category 路由</h4>
+      <p>用 <code>task(category="ultrabrain")</code> 代替指定具体模型。系统会自动选最优模型，未来换模型也不用改代码。</p>
+    </div>
+
+    <div class="card">
+      <h4>LSP 诊断</h4>
+      <p>每次代码变更后自动跑 <code>lsp_diagnostics</code>。agent 不会交烂代码——LSP 检查不过它不会停。</p>
+    </div>
+
+    <div class="card">
+      <h4>Hashline 编辑</h4>
+      <p>每行代码都有 LINE#ID 内容哈希保护。编辑时如果行内容变了，agent 会自动重读文件而不是写烂代码。</p>
+    </div>
+
+    <div class="card">
+      <h4>健康检查</h4>
+      <p>出问题了？</p>
+      <pre style="font-size:12px;margin:10px 0 0;padding:10px 14px;"><code>bunx oh-my-opencode doctor</code></pre>
+      <p style="margin-top:6px;">检查系统、配置、工具、模型四个维度。</p>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="next-section">
+    <a class="prev" href="guide.html">&larr; 返回导读</a>
+    <span></span>
+  </div>
+</section>
+
+</main>
+</body>
+</html>
