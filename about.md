@@ -4,15 +4,16 @@ title: About
 permalink: /about/
 ---
 
-This is the base Jekyll theme. You can find out more info about customizing your Jekyll theme, as well as basic Jekyll usage documentation at [jekyllrb.com](https://jekyllrb.com/)
+Game Developer 🎮 | Vibe Coder 🖥️ | Amateur Boxer 🥊
 
-You can find the source code for Minima at GitHub:
-[jekyll][jekyll-organization] /
-[minima](https://github.com/jekyll/minima)
+Building things with code, exploring AI, and enjoying permanent vacation retirement 🌴.
 
-You can find the source code for Jekyll at GitHub:
-[jekyll][jekyll-organization] /
-[jekyll](https://github.com/jekyll/jekyll)
+### Links
 
+- GitHub: [xiaobin83](https://github.com/xiaobin83)
+- Twitter: [@xiaobin_huang](https://www.twitter.com/xiaobin_huang)
+- Email: [xiaobin.huang@gmail.com](mailto:xiaobin.huang@gmail.com)
 
-[jekyll-organization]: https://github.com/jekyll
+### About this site
+
+Personal documentation and architecture notes covering [Oh My OpenAgent](/understanding-omo/index.html) usage guides and deep dives into AI agent architecture with OpenViking.
