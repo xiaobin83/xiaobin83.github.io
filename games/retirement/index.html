@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wireframe Runner</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+  }
+  .game-container {
+    background: #111118;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 0 30px rgba(0, 200, 255, 0.05);
+  }
+  canvas {
+    display: block;
+    border: 1px solid #2a2a3a;
+    background: #0d0d14;
+  }
+  .info {
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    color: #4a4a6a;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .info span { color: #6a6a9a; }
+</style>
+</head>
+<body>
+<div class="game-container">
+  <canvas id="game" width="400" height="300"></canvas>
+  <div class="info">
+    <span>&#11014; &#11015; &#11013; &#10145;</span>
+    <span>WIREFRAME<span id="counter"> &#9670; 0</span></span>
+  </div>
+</div>
+<script>
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const counter = document.getElementById('counter');
+
+  const SIZE = 32;
+  let x = 184;
+  let y = 134;
+  const SPEED = 4;
+
+  const keys = { up: false, down: false, left: false, right: false };
+  let moveCount = 0;
+
+  document.addEventListener('keydown', e => {
+    switch(e.key) {
+      case 'ArrowUp':    keys.up = true; e.preventDefault(); break;
+      case 'ArrowDown':  keys.down = true; e.preventDefault(); break;
+      case 'ArrowLeft':  keys.left = true; e.preventDefault(); break;
+      case 'ArrowRight': keys.right = true; e.preventDefault(); break;
+    }
+  });
+  document.addEventListener('keyup', e => {
+    switch(e.key) {
+      case 'ArrowUp':    keys.up = false; e.preventDefault(); break;
+      case 'ArrowDown':  keys.down = false; e.preventDefault(); break;
+      case 'ArrowLeft':  keys.left = false; e.preventDefault(); break;
+      case 'ArrowRight': keys.right = false; e.preventDefault(); break;
+    }
+  });
+
+  function update() {
+    if (keys.up) y = Math.max(0, y - SPEED);
+    if (keys.down) y = Math.min(300 - SIZE, y + SPEED);
+    if (keys.left) x = Math.max(0, x - SPEED);
+    if (keys.right) x = Math.min(400 - SIZE, x + SPEED);
+    if (keys.up || keys.down || keys.left || keys.right) {
+      moveCount++;
+      counter.textContent = ' \u25C6 ' + moveCount;
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, 400, 300);
+
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 400; i += 32) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 300); ctx.stroke();
+    }
+    for (let i = 0; i < 300; i += 32) {
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(400, i); ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#00d4ff';
+    ctx.strokeRect(x, y, SIZE, SIZE);
+    ctx.shadowBlur = 0;
+
+    const c = 4;
+    ctx.strokeStyle = '#00d4ff44';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 6, y); ctx.lineTo(x, y); ctx.lineTo(x, y - 6);
+    ctx.moveTo(x + SIZE + 6, y); ctx.lineTo(x + SIZE, y); ctx.lineTo(x + SIZE, y - 6);
+    ctx.moveTo(x - 6, y + SIZE); ctx.lineTo(x, y + SIZE); ctx.lineTo(x, y + SIZE + 6);
+    ctx.moveTo(x + SIZE + 6, y + SIZE); ctx.lineTo(x + SIZE, y + SIZE); ctx.lineTo(x + SIZE, y + SIZE + 6);
+    ctx.stroke();
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  let lastTime = 0;
+  const interval = 1000 / 60;
+
+  function gameLoop(timestamp) {
+    const delta = timestamp - lastTime;
+    if (delta >= interval) {
+      lastTime = timestamp - (delta % interval);
+      update();
+      draw();
+    } else {
+      requestAnimationFrame(gameLoop);
+    }
+  }
+
+  requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
