@@ -458,26 +458,15 @@ pre > code {
   padding-left: var(--spacing-half);
 }
 
-.footer-col-1 {
-  width: calc(35% - var(--spacing-half));
-}
-
+.footer-col-1,
 .footer-col-2 {
-  width: calc(20% - var(--spacing-half));
-}
-
-.footer-col-3 {
-  width: calc(45% - var(--spacing-half));
+  width: calc(50% - var(--spacing-half));
 }
 
 @media screen and (max-width: 800px) {
   .footer-col-1,
   .footer-col-2 {
     width: calc(50% - var(--spacing-half));
-  }
-
-  .footer-col-3 {
-    width: calc(100% - var(--spacing-half));
   }
 }
 
