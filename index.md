@@ -20,7 +20,9 @@ layout: home
 - [第三层 · Hook 与工具](docs/understanding-omo/level-3-hooks.html) — 扩展系统与自定义工具
 - [第四层 · 架构深度](docs/understanding-omo/level-4-architecture.html) — 完整技术架构全景
 
-## Architecture Documents
+## OpenViking Documents
+
+[OpenViking](https://openviking.ai) 是一个面向 AI Agent 的开源上下文数据库。它以文件系统范式统一管理 Agent 的记忆、资源与技能，让你的 AI 助手拥有持久化、可追溯的上下文能力。
 
 - [Vikingbot 架构深度解析](docs/vikingbot-architecture.html) — 基于 OpenViking 的 OpenClaw-like AI Agent 框架详解
 - [OpenViking Agent Memory 架构深度解析](docs/agent-memory-architecture.html) — 从 YAML 配置到 LLM 提取，再到 ReAct 循环与持久化的记忆系统
