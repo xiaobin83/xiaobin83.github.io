@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -10,6 +10,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    (function() {
+      var html = document.documentElement;
+      var match = document.cookie.match(/(?:^| )theme=([^;]*)/);
+      var theme = match ? match[1] : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      html.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body>
   <header class="site-header" role="banner">
@@ -64,9 +72,13 @@
               <svg class="svg-icon"><use xlink:href="{{ '/assets/minima-social-icons.svg#github' | relative_url }}"></use></svg>
               <span class="username">{{ site.github_username }}</span>
             </a></li>
-            <li><a href="https://www.twitter.com/{{ site.twitter_username }}">
-              <svg class="svg-icon"><use xlink:href="{{ '/assets/minima-social-icons.svg#twitter' | relative_url }}"></use></svg>
-              <span class="username">{{ site.twitter_username }}</span>
+            <li><a href="https://www.linkedin.com/in/xiaobin-huang-70353320/">
+              <svg class="svg-icon"><use xlink:href="{{ '/assets/minima-social-icons.svg#linkedin' | relative_url }}"></use></svg>
+              <span class="username">xiaobin-huang</span>
+            </a></li>
+            <li><a href="https://space.bilibili.com/4285231">
+              <svg class="svg-icon"><use xlink:href="{{ '/assets/minima-social-icons.svg#bilibili' | relative_url }}"></use></svg>
+              <span class="username">4285231</span>
             </a></li>
           </ul>
         </div>
@@ -82,37 +94,25 @@
 
   <script>
     (function() {
-      const STORAGE_KEY = 'theme-preference';
-      const html = document.documentElement;
-
-      function getPreferredTheme() {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) return stored;
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
+      var html = document.documentElement;
 
       function setTheme(theme) {
         html.setAttribute('data-theme', theme);
-        localStorage.setItem(STORAGE_KEY, theme);
+        document.cookie = 'theme=' + theme + ';path=/;max-age=31536000';
       }
 
-      // Apply theme immediately to prevent flash
-      setTheme(getPreferredTheme());
-
-      // Toggle handler
       document.addEventListener('DOMContentLoaded', function() {
-        const toggle = document.getElementById('theme-toggle');
+        var toggle = document.getElementById('theme-toggle');
         if (toggle) {
           toggle.addEventListener('click', function() {
-            const current = html.getAttribute('data-theme');
+            var current = html.getAttribute('data-theme');
             setTheme(current === 'dark' ? 'light' : 'dark');
           });
         }
       });
 
-      // Listen for system preference changes
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-        if (!localStorage.getItem(STORAGE_KEY)) {
+        if (!document.cookie.match(/(?:^| )theme=/)) {
           setTheme(e.matches ? 'dark' : 'light');
         }
       });
