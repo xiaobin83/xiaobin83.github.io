@@ -2,6 +2,8 @@
 layout: home
 ---
 
+Game Developer 🎮 | Vibe Coder 🖥️ | Amateur Boxer 🥊 | Enjoying Permanent Vacation Retirement 🌴
+
 ## Oh My OpenAgent 文档
 
 - [新手上路](understanding-omo/index.html) — 快速开始，安装即用
