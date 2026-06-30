@@ -5,3 +5,7 @@ vendor/
 .DS_Store
 __pycache__/
 .bundle/
+docs/superpowers
+.codegraph/
+.omo/
+.opencode/
