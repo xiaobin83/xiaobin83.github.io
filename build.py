@@ -6,7 +6,7 @@ import os
 import yaml
 from datetime import datetime
 
-SITE_DIR = "/home/xiaobin/Workspace/xiaobin83.github.io"
+SITE_DIR = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.join(SITE_DIR, "_site")
 SITE_CONFIG = {
     "title": "0x600d1dea",
