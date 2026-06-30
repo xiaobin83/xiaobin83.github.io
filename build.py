@@ -4,6 +4,7 @@
 import re
 import os
 import yaml
+import shutil
 from datetime import datetime
 
 SITE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,10 +12,9 @@ BUILD_DIR = os.path.join(SITE_DIR, "_site")
 SITE_CONFIG = {
     "title": "0x600d1dea",
     "email": "xiaobin.huang@gmail.com",
-    "description": "Write an awesome description for your new site here.",
+    "description": "Personal site — architecture deep dives, Oh My OpenAgent guides, and AI agent framework notes by xiaobin83.",
     "baseurl": "",
     "url": "",
-    "twitter_username": "xiaobin_huang",
     "github_username": "xiaobin83",
 }
 
@@ -186,6 +186,73 @@ def apply_template_vars(result, page_vars):
     )
     return result
 
+def inject_docs_theme(file_path):
+    with open(file_path, 'r') as f:
+        html = f.read()
+    if 'data-omo-docs="1"' in html:
+        return
+    is_omo = '/understanding-omo/' in file_path
+    font_html = (
+        '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">'
+    )
+    head_script = (
+        '<script>\n'
+        '(function() {\n'
+        '  var m = document.cookie.match(/(?:^| )theme=([^;]*)/);\n'
+        '  document.documentElement.setAttribute("data-theme", m ? m[1] : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));\n'
+        '})();\n'
+        '</script>'
+    )
+    html = html.replace('</head>', font_html + '\n' + head_script + '\n</head>')
+    if not is_omo:
+        html = html.replace('</head>', '<link rel="stylesheet" href="/assets/main.css">\n</head>')
+    sun_svg = '<svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
+    moon_svg = '<svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+    toggle_button = (
+        '<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">\n'
+        '      ' + sun_svg + '\n'
+        '      ' + moon_svg + '\n'
+        '    </button>'
+    )
+    toggle_script = (
+        '<script>\n'
+        'function toggleTheme() {\n'
+        '  var html = document.documentElement;\n'
+        '  var current = html.getAttribute("data-theme");\n'
+        '  var next = current === "dark" ? "light" : "dark";\n'
+        '  html.setAttribute("data-theme", next);\n'
+        '  document.cookie = "theme=" + next + ";path=/;max-age=31536000";\n'
+        '}\n'
+        '</script>'
+    )
+    if is_omo:
+        header = (
+            '<header class="doc-topbar">\n'
+            '  <a class="doc-topbar-title" href="/">0x600d1dea</a>\n'
+            '  ' + toggle_button + '\n'
+            '</header>\n'
+            '<div class="body-wrap">'
+        )
+        html = html.replace('<body>', '<body data-omo-docs="1">\n' + header)
+        html = html.replace('</body>', '</div>\n' + toggle_script + '\n</body>')
+    else:
+        header = (
+            '<header class="site-header" role="banner">\n'
+            '  <div class="wrapper header-inner">\n'
+            '    <a class="site-title" href="/">0x600d1dea</a>\n'
+            '    ' + toggle_button + '\n'
+            '  </div>\n'
+            '</header>'
+        )
+        html = html.replace('<body>', '<body data-omo-docs="1">\n' + header)
+        html = html.replace('</body>', toggle_script + '\n</body>')
+    with open(file_path, 'w') as f:
+        f.write(html)
+    print(f"  🎨 injected theme \u2192 {os.path.relpath(file_path, SITE_DIR)}")
+
+
 def build_page(src_path, dest_path):
     """Build a single page from markdown source."""
     with open(src_path, "r") as f:
@@ -228,7 +295,6 @@ def build():
     
 
     
-    import shutil
     SKIP_DIRS = {"_site", "_layouts", "_includes", "_posts", ".git"}
     SKIP_PREFIXES = (".", "_")
     SKIP_EXTENSIONS = (".md", ".markdown")
@@ -245,7 +311,10 @@ def build():
             dest = os.path.join(BUILD_DIR, rel)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             shutil.copy2(src, dest)
-            print(f"  → {rel}")
+            if f.endswith(".html") and rel.startswith("docs"):
+                inject_docs_theme(dest)
+            else:
+                print(f"  → {rel}")
     
     # Copy _site to serve root for simplicity
     print(f"\nSite built at: {BUILD_DIR}")
