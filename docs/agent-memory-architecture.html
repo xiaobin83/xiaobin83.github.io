@@ -4,33 +4,54 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenViking Agent Memory 架构深度解析</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #faf7f2;
+  :root, [data-theme="light"] {
+    --bg: #fdfdfd;
     --surface: #ffffff;
-    --surface-alt: #f5f0e8;
-    --border: #e6dfd3;
-    --border-strong: #d4c8b6;
-    --text: #2c2416;
-    --text-muted: #8c8070;
-    --text-dim: #b0a594;
-    --accent: #c76b3a;
-    --accent-glow: #e8925a;
-    --accent-soft: rgba(199,107,58,0.08);
-    --accent-soft-border: rgba(199,107,58,0.18);
-    --blue: #4a7d9e;
-    --green: #5a8a5c;
-    --purple: #8b6baa;
-    --rose: #c25a6e;
-    --code-bg: #fdfaf5;
-    --code-border: #ebe3d5;
-    --code-text: #3d3020;
-    --shadow-sm: 0 1px 3px rgba(44,36,22,0.04);
-    --shadow-md: 0 4px 16px rgba(44,36,22,0.06);
-    --shadow-lg: 0 12px 40px rgba(44,36,22,0.08);
+    --surface-alt: #f6f8fa;
+    --border: #d0d7de;
+    --border-strong: #c0c7d0;
+    --text: #1f2328;
+    --text-muted: #656d76;
+    --text-dim: #8b949e;
+    --accent: #2a7ae2;
+    --accent-glow: #0969da;
+    --accent-soft: rgba(42,122,226,0.08);
+    --accent-soft-border: rgba(42,122,226,0.18);
+    --blue: #2a7ae2;
+    --green: #1a7f37;
+    --purple: #8250df;
+    --rose: #cf222e;
+    --code-bg: #f6f8fa;
+    --code-border: #d0d7de;
+    --code-text: #1f2328;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-alt: #21262d;
+    --border: #30363d;
+    --border-strong: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --text-dim: #6e7681;
+    --accent: #58a6ff;
+    --accent-glow: #79c0ff;
+    --accent-soft: rgba(88,166,255,0.12);
+    --accent-soft-border: rgba(88,166,255,0.20);
+    --blue: #58a6ff;
+    --green: #3fb950;
+    --purple: #a371f7;
+    --rose: #f85149;
+    --code-bg: #161b22;
+    --code-border: #30363d;
+    --code-text: #e6edf3;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,23 +59,12 @@
   html { scroll-behavior: smooth; }
 
   body {
-    font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.8;
-    font-size: 17px;
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
-  }
-
-  /* ── Decorative top bar ── */
-  .top-bar {
-    height: 4px;
-    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-glow) 25%, var(--rose) 50%, var(--purple) 75%, var(--blue) 100%);
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 100;
   }
 
   /* ── Hero ── */
@@ -74,8 +84,8 @@
     width: 140%;
     height: 180%;
     background:
-      radial-gradient(ellipse at 25% 60%, rgba(199,107,58,0.05) 0%, transparent 50%),
-      radial-gradient(ellipse at 75% 40%, rgba(139,107,170,0.04) 0%, transparent 50%);
+      radial-gradient(ellipse at 25% 60%, var(--accent-soft) 0%, transparent 50%),
+      radial-gradient(ellipse at 75% 40%, rgba(130,80,223,0.04) 0%, transparent 50%);
     pointer-events: none;
   }
   .hero-overline {
@@ -423,11 +433,11 @@
     .card { padding: 20px 22px; }
     pre { padding: 18px 20px; }
   }
+
+
 </style>
 </head>
 <body>
-
-<div class="top-bar"></div>
 
 <!-- ═══════════════════ Hero ═══════════════════ -->
 <header class="hero">
