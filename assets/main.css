@@ -656,11 +656,46 @@ table td {
    Home — Tagline
    -------------------------------------------- */
 .home-tagline {
-  font-size: 1.125em;
-  color: var(--color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  padding: 20px 0;
   margin-bottom: 2em;
-  line-height: 1.5;
-  padding: var(--spacing-half) 0;
+}
+
+.tagline-item {
+  font-size: 1em;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tagline-emoji {
+  font-size: 1.25em;
+  margin-right: 4px;
+}
+
+.tagline-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+@media screen and (max-width: 600px) {
+  .home-tagline {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tagline-dot {
+    display: none;
+  }
+  .tagline-item {
+    white-space: normal;
+    text-align: center;
+  }
 }
 
 /* --------------------------------------------

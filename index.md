@@ -2,8 +2,6 @@
 layout: home
 ---
 
-Game Developer 🎮 | Vibe Coder 🖥️ | Amateur Boxer 🥊 | Enjoying Permanent Vacation Retirement 🌴
-
 ## Oh My OpenAgent 文档
 
 多模型 AI 开发团队的使用指南与深度解析。
