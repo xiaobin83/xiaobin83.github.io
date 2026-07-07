@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 扩展系统 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">扩展系统</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a class="current" href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-f7a18b17">架构概览</a></li>
+      <li><a href="#sec-d49716d8">生命周期与事件流</a></li>
+      <li><a href="#sec-42924a5a">上下文系统</a></li>
+      <li><a href="#sec-b287dfd6">工具系统</a></li>
+      <li><a href="#ui-29b5f2bf">UI 扩展</a></li>
+      <li><a href="#sec-db236be1">会话生命周期与会话替换</a></li>
+      <li><a href="#sec-a23d8e96">错误处理与模式行为</a></li>
+      <li><a href="#sec-7b80cf5e">扩展加载机制</a></li>
+      <li><a href="#extensions-md-1b6f155e">与 extensions.md 的关系</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>扩展系统架构</h1>
+<p>pi 的扩展系统是一套类型安全的插件框架，允许 TypeScript 模块订阅 agent 生命周期事件、注册 LLM 可调用的自定义工具、添加命令/快捷键/CLI 标志，以及注入自定义 UI 组件。扩展通过 <a href="https://github.com/unjs/jiti">jiti</a> 即时编译，无需构建步骤。</p>
+</section>
+
+<section id="sec-f7a18b17">
+<h2 id="sec-f7a18b17">架构概览</h2>
+<p>扩展系统的核心由四个模块组成：</p>
+<pre><code>+--------------------------------------------------------------+
+|                        ExtensionAPI                         |
+|  (扩展工厂函数接收的 API 对象，用于注册和操作)                |
++--------------------------------------------------------------+
+|  registerTool  registerCommand  registerShortcut  registerFlag |
+|  registerProvider  on(event, handler)  sendMessage  events    |
+|  setActiveTools  appendEntry  setSessionName  exec           |
++----------+---------------------------------------------------+
+           | 写入
++----------v---------------------------------------------------+
+|                       ExtensionRunner                        |
+|  (事件分发中心，持有所有 Extension 实例和运行时状态)          |
++--------------------------------------------------------------+
+|  emit(event) -&gt; 遍历所有 Extension 的 handlers 并调用         |
+|  createContext() -&gt; 创建 ExtensionContext (懒求值 getter)     |
+|  createCommandContext() -&gt; 创建 ExtensionCommandContext        |
+|  bindCore() / bindCommandContext() / setUIContext()          |
++----------+---------------------------------------------------+
+           | 持有
++----------v---------------------------------------------------+
+|                     Extension[] (多个)                       |
++--------------------------------------------------------------+
+|  handlers: Map&lt;eventType, HandlerFn[]&gt;                       |
+|  tools: Map&lt;toolName, RegisteredTool&gt;                        |
+|  commands: Map&lt;commandName, RegisteredCommand&gt;               |
+|  flags / shortcuts / messageRenderers / entryRenderers       |
++--------------------------------------------------------------+
+</code></pre>
+<p><strong>loader.ts</strong> -- 负责发现和加载扩展模块。支持从目录自动发现 (<code>~/.pi/agent/extensions/</code>、<code>.pi/extensions/</code>)、解析 <code>package.json</code> 的 <code>pi</code> 清单字段，以及通过 <code>-e</code> 标志显式加载。使用 jiti 的 <code>virtualModules</code> (Bun 二进制模式) 或 <code>alias</code> (Node.js 开发模式) 提供对 <code>@earendil-works/pi-coding-agent</code>、<code>@earendil-works/pi-agent-core</code>、<code>@earendil-works/pi-tui</code>、<code>typebox</code> 等内置包的零配置导入。</p>
+<p><strong>wrapper.ts</strong> -- 将 <code>RegisteredTool</code> (扩展注册的工具定义) 包装为 <code>AgentTool</code> (agent-core 的标准工具接口)。核心逻辑只有两行：调用 <code>wrapToolDefinition</code> 并传入 <code>runner.createContext()</code> 作为上下文工厂，确保工具执行时获得最新的 ExtensionContext。</p>
+</section>
+
+<section id="sec-d49716d8">
+<h2 id="sec-d49716d8">生命周期与事件流</h2>
+<p>pi 从启动到用户交互再到退出，经历一个严格的事件序列。下图展示完整流程：</p>
+<pre><code>pi 启动
+  |
+  +--&gt; project_trust         &lt;-- 仅 user/global 扩展和 CLI -e 扩展参与
+  |                             (返回 yes/no 则跳过内置信任提示)
+  |
+  +--&gt; session_start         &lt;-- reason: &quot;startup&quot;
+  |
+  +--&gt; resources_discover    &lt;-- reason: &quot;startup&quot;
+      |                          (扩展可贡献额外的 skill/prompt/theme 路径)
+      |
+      v
++-------------------------------------------------------------+
+|                    用户输入循环                              |
+|                                                             |
+|  input                  &lt;-- 可拦截 (handled)、转换 (transform) |
+|    |                        或放行 (continue)                  |
+|    +--&gt; (扩展命令检查，命中则直接执行命令)                     |
+|    +--&gt; (skill/template 展开)                                |
+|    |                                                        |
+|    +--&gt; before_agent_start  &lt;-- 可注入 message、修改 systemPrompt|
+|    +--&gt; agent_start                                          |
+|    +--&gt; message_start / message_update / message_end         |
+|    |                                                        |
+|    |   +--- turn 循环 (LLM 持续调用工具则重复) ----+         |
+|    |   |                                          |         |
+|    |   +--&gt; turn_start                             |         |
+|    |   +--&gt; context          &lt;-- 可修改消息列表      |         |
+|    |   +--&gt; before_provider_request &lt;-- 可替换 payload|        |
+|    |   +--&gt; after_provider_response &lt;-- status+headers|       |
+|    |   |                                          |         |
+|    |   |   LLM 响应，可能调用工具：                 |         |
+|    |   |     +--&gt; tool_execution_start             |         |
+|    |   |     +--&gt; tool_call      &lt;-- 可 block       |         |
+|    |   |     +--&gt; tool_execution_update            |         |
+|    |   |     +--&gt; tool_result    &lt;-- 可修改 content  |        |
+|    |   |     +--&gt; tool_execution_end               |         |
+|    |   |                                          |         |
+|    |   +--&gt; turn_end                               |         |
+|    |                                                        |
+|    +--&gt; agent_end                                            |
+|                                                             |
+|  用户再次输入 -----------------------------------------------+
+|
++--&gt; /new 或 /resume (会话替换)
+|     +--&gt; session_before_switch &lt;-- 可 cancel
+|     +--&gt; session_shutdown      &lt;-- reason: &quot;new&quot; | &quot;resume&quot;
+|     +--&gt; session_start         &lt;-- reason: &quot;new&quot; | &quot;resume&quot;
+|     +--&gt; resources_discover
+|
++--&gt; /fork 或 /clone
+|     +--&gt; session_before_fork   &lt;-- 可 cancel
+|     +--&gt; session_shutdown      &lt;-- reason: &quot;fork&quot;
+|     +--&gt; session_start         &lt;-- reason: &quot;fork&quot;
+|     +--&gt; resources_discover
+|
++--&gt; /compact 或自动压缩
+|     +--&gt; session_before_compact &lt;-- 可 cancel 或提供自定义摘要
+|     +--&gt; session_compact
+|
++--&gt; /tree 导航
+|     +--&gt; session_before_tree   &lt;-- 可 cancel 或提供自定义摘要
+|     +--&gt; session_tree
+|
++--&gt; /model 或 Ctrl+P (模型切换)
+|     +--&gt; thinking_level_select  &lt;-- (如果模型切换导致 thinking level 变化)
+|     +--&gt; model_select
+|
++--&gt; 退出 (Ctrl+C, /quit, shutdown())
+      +--&gt; session_shutdown      &lt;-- reason: &quot;quit&quot;
+</code></pre>
+<h3>事件分类</h3>
+<p><strong>启动与资源事件</strong>: <code>project_trust</code> (项目信任决策，早于项目资源加载)、<code>resources_discover</code> (扩展贡献额外资源路径)</p>
+<p><strong>会话事件</strong>: <code>session_start</code> (会话创建/加载/重载)、<code>session_shutdown</code> (运行时销毁前的清理)、<code>session_before_switch</code> (会话切换前，可取消)、<code>session_before_fork</code> (分支前，可取消)、<code>session_before_compact</code> (压缩前，可取消或提供自定义摘要)、<code>session_compact</code> (压缩后)、<code>session_before_tree</code> (树导航前，可取消)、<code>session_tree</code> (树导航后)、<code>session_info_changed</code> (会话名称变更)</p>
+<p><strong>Agent 事件</strong>: <code>before_agent_start</code> (agent 循环前，可注入消息、修改 system prompt)、<code>agent_start</code> / <code>agent_end</code>、<code>turn_start</code> / <code>turn_end</code>、<code>message_start</code> / <code>message_update</code> / <code>message_end</code>、<code>tool_execution_start</code> / <code>tool_execution_update</code> / <code>tool_execution_end</code></p>
+<p><strong>上下文与请求事件</strong>: <code>context</code> (LLM 调用前，可修改消息列表)、<code>before_provider_request</code> (请求发出前，可替换 payload)、<code>after_provider_response</code> (响应接收后，流消费前)</p>
+<p><strong>工具事件</strong>: <code>tool_call</code> (工具执行前，可 block；可修改 <code>event.input</code>)、<code>tool_result</code> (工具执行后，可修改 content/details/isError)</p>
+<p><strong>模型与输入事件</strong>: <code>model_select</code> (模型切换)、<code>thinking_level_select</code> (思考等级变更)、<code>input</code> (用户输入，可拦截/转换/放行)、<code>user_bash</code> (<code>!</code> 前缀命令，可替换执行操作或结果)</p>
+<p>各事件的详细签名、返回值类型和示例参见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">extensions.md</a>。</p>
+</section>
+
+<section id="sec-42924a5a">
+<h2 id="sec-42924a5a">上下文系统</h2>
+<p>扩展的事件处理函数和工具执行函数接收两类上下文对象。</p>
+<h3>ExtensionContext</h3>
+<p><code>ExtensionContext</code> 是所有事件处理函数和工具 <code>execute</code> 的基础上下文：</p>
+<pre><code class="language-typescript">interface ExtensionContext {
+  ui: ExtensionUIContext;          // UI 交互方法
+  mode: &quot;tui&quot; | &quot;rpc&quot; | &quot;json&quot; | &quot;print&quot;;  // 当前运行模式
+  hasUI: boolean;                  // 是否有对话框能力 (tui/rpc 为 true)
+  cwd: string;                     // 当前工作目录
+  sessionManager: ReadonlySessionManager;  // 只读会话管理器
+  modelRegistry: ModelRegistry;    // 模型注册表
+  model: Model&lt;any&gt; | undefined;   // 当前模型
+  isIdle(): boolean;               // agent 是否空闲
+  isProjectTrusted(): boolean;     // 项目是否受信任
+  signal: AbortSignal | undefined; // 当前 abort 信号
+  abort(): void;                   // 中断当前 agent 操作
+  hasPendingMessages(): boolean;   // 是否有排队消息
+  shutdown(): void;                // 优雅关闭 pi
+  getContextUsage(): ContextUsage | undefined;  // 当前上下文用量
+  compact(options?: CompactOptions): void;      // 触发压缩
+  getSystemPrompt(): string;       // 当前 system prompt
+}
+</code></pre>
+<p>所有属性通过 getter 懒求值，保证每次访问都返回最新值 (例如 <code>ctx.model</code> 在模型切换后自动更新)。上下文对象在 <code>session_start</code> 之后保持有效，但在会话替换 (<code>newSession</code>、<code>fork</code>、<code>switchSession</code>) 或 <code>reload</code> 后会变为 stale。访问 stale 上下文会抛出错误，提示将后续逻辑移入 <code>withSession</code> 回调。</p>
+<h3>ExtensionCommandContext</h3>
+<p><code>ExtensionCommandContext</code> 扩展了 <code>ExtensionContext</code>，增加了命令处理器专用的会话控制方法：</p>
+<pre><code class="language-typescript">interface ExtensionCommandContext extends ExtensionContext {
+  getSystemPromptOptions(): BuildSystemPromptOptions;
+  waitForIdle(): Promise&lt;void&gt;;         // 等待 agent 完成流式输出
+  newSession(options?): Promise&lt;{ cancelled: boolean }&gt;;
+  fork(entryId, options?): Promise&lt;{ cancelled: boolean }&gt;;
+  navigateTree(targetId, options?): Promise&lt;{ cancelled: boolean }&gt;;
+  switchSession(sessionPath, options?): Promise&lt;{ cancelled: boolean }&gt;;
+  reload(): Promise&lt;void&gt;;
+}
+</code></pre>
+<p>这些方法仅通过命令处理器 (<code>registerCommand</code> 的 <code>handler</code>) 提供，不在普通事件处理函数中可用。<code>waitForIdle</code> 确保命令在 agent 空闲后执行；<code>newSession</code>/<code>fork</code>/<code>switchSession</code> 触发会话替换流程。</p>
+<h3>ReplacedSessionContext</h3>
+<p><code>ReplacedSessionContext</code> 进一步扩展 <code>ExtensionCommandContext</code>，仅在 <code>withSession</code> 回调中提供，新增 <code>sendMessage</code> 和 <code>sendUserMessage</code>，允许在新会话中立即发送消息。</p>
+</section>
+
+<section id="sec-b287dfd6">
+<h2 id="sec-b287dfd6">工具系统</h2>
+<h3>注册与执行</h3>
+<p>扩展通过 <code>pi.registerTool()</code> 注册工具。每个工具定义包含：</p>
+<ul>
+<li><strong>参数 schema</strong>: 使用 TypeBox 定义，自动生成 JSON Schema 供 LLM 使用</li>
+<li><strong>execute 函数</strong>: 接收 <code>toolCallId</code>、已验证的 <code>params</code>、<code>signal</code> (用于取消)、<code>onUpdate</code> (流式输出回调)、<code>ctx</code> (ExtensionContext)</li>
+<li><strong>可选渲染器</strong>: <code>renderCall</code> 和 <code>renderResult</code> 控制工具在 TUI 中的显示</li>
+<li><strong>可选 prompt 提示</strong>: <code>promptSnippet</code> 和 <code>promptGuidelines</code> 用于自定义 system prompt 中的工具描述</li>
+</ul>
+<p>工具注册后，wrapper.ts 将其包装为 <code>AgentTool</code>，纳入 agent-core 的标准工具执行流程。扩展工具和内置工具在同一工具调用周期中执行，共享并行/串行调度逻辑。</p>
+<p>工具优先级规则：同名工具以先注册的为准，因此扩展可以通过注册与内置工具同名的工具来覆盖内置行为 (例如自定义 <code>bash</code> 工具，将命令路由到远程执行)。</p>
+<h3>工具事件拦截</h3>
+<p><code>tool_call</code> 事件在工具执行前触发，允许扩展：</p>
+<ul>
+<li><strong>修改参数</strong>: 直接修改 <code>event.input</code> (无需返回值)，后续 handler 和工具执行会看到修改后的值</li>
+<li><strong>阻止执行</strong>: 返回 <code>{ block: true, reason: "..." }</code></li>
+</ul>
+<p><code>tool_result</code> 事件在工具执行后触发，允许扩展修改 <code>content</code>、<code>details</code>、<code>isError</code>。</p>
+<p>这两个事件构成了权限门控 (permission gate)、路径保护 (path protection)、命令审计等扩展模式的基础。</p>
+</section>
+
+<section id="ui-29b5f2bf">
+<h2 id="ui-29b5f2bf">UI 扩展</h2>
+<p>扩展可以通过 <code>ctx.ui</code> 操作 TUI 的各个视觉区域：</p>
+<pre><code>+--------------------------------------------+
+|  Header (setHeader)                        |
++--------------------------------------------+
+|  Widget above editor (setWidget, default)  |
++--------------------------------------------+
+|  Messages / Chat area                      |
+|    - 消息渲染 (registerMessageRenderer)     |
+|    - 条目渲染 (registerEntryRenderer)       |
+|    - 工具调用/结果渲染 (renderCall/renderResult) |
++--------------------------------------------+
+|  Widget below editor (setWidget, belowEditor) |
++--------------------------------------------+
+|  Editor (setEditorComponent)               |
++--------------------------------------------+
+|  Footer (setFooter)                        |
+|    - Status (setStatus)                    |
+|    - Working indicator (setWorkingIndicator)|
++--------------------------------------------+
+</code></pre>
+<ul>
+<li><strong>自定义编辑器</strong>: 通过 <code>setEditorComponent</code> 替换输入编辑器 (如 vim 模式)，继承 <code>CustomEditor</code> 并调用 <code>super.handleInput()</code> 可保留应用级快捷键</li>
+<li><strong>浮层 (Overlay)</strong>: <code>ctx.ui.custom()</code> 配合 <code>{ overlay: true }</code> 可在现有内容上显示模态组件</li>
+<li><strong>主题管理</strong>: <code>ctx.ui.setTheme()</code>、<code>ctx.ui.getAllThemes()</code>、<code>ctx.ui.theme</code> 支持动态主题切换和自定义颜色</li>
+</ul>
+</section>
+
+<section id="sec-db236be1">
+<h2 id="sec-db236be1">会话生命周期与会话替换</h2>
+<p>扩展的运行实例与当前会话绑定。当发生会话替换 (<code>/new</code>、<code>/resume</code>、<code>/fork</code>、<code>/clone</code>) 或 <code>/reload</code> 时：</p>
+<ol>
+<li>触发 <code>session_before_switch</code> 或 <code>session_before_fork</code> (可被取消)</li>
+<li>触发 <code>session_shutdown</code> (扩展应清理资源)</li>
+<li>销毁旧的 <code>ExtensionRunner</code> 和所有 <code>Extension</code> 实例</li>
+<li>重新加载扩展模块，创建新的实例</li>
+<li>触发 <code>session_start</code> (扩展应重新建立状态)</li>
+<li>旧的 <code>ExtensionContext</code> 变为 stale，访问会抛出错误</li>
+</ol>
+<p><strong>关键规则</strong>: 不要在 <code>newSession</code>/<code>fork</code>/<code>switchSession</code>/<code>reload</code> 之后继续使用捕获的 <code>pi</code> 或 <code>ctx</code> 引用。会话替换后的工作应移入 <code>withSession</code> 回调，使用回调提供的 <code>ReplacedSessionContext</code>。</p>
+</section>
+
+<section id="sec-a23d8e96">
+<h2 id="sec-a23d8e96">错误处理与模式行为</h2>
+<h3>错误处理</h3>
+<ul>
+<li>扩展事件处理器中的异常会被捕获并记录，agent 继续运行</li>
+<li><code>tool_call</code> 处理器异常会阻止工具执行 (fail-safe)</li>
+<li>工具 <code>execute</code> 中的异常被捕获后以 <code>isError: true</code> 报告给 LLM，执行继续</li>
+</ul>
+<h3>模式行为</h3>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th><code>ctx.mode</code></th>
+<th><code>ctx.hasUI</code></th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>交互模式</td>
+<td><code>"tui"</code></td>
+<td><code>true</code></td>
+<td>完整 TUI，所有 UI 方法可用</td>
+</tr>
+<tr>
+<td>RPC 模式</td>
+<td><code>"rpc"</code></td>
+<td><code>true</code></td>
+<td>对话框通过 JSON 协议；<code>custom()</code> 返回 <code>undefined</code></td>
+</tr>
+<tr>
+<td>JSON 模式</td>
+<td><code>"json"</code></td>
+<td><code>false</code></td>
+<td>事件流输出到 stdout；UI 方法为 no-op</td>
+</tr>
+<tr>
+<td>Print 模式</td>
+<td><code>"print"</code></td>
+<td><code>false</code></td>
+<td>扩展运行但无法弹出交互提示</td>
+</tr>
+</tbody>
+</table>
+<p>使用 <code>ctx.mode === "tui"</code> 守卫 TUI 专用功能 (<code>custom()</code>、组件工厂、终端输入监听)。使用 <code>ctx.hasUI</code> 守卫在 TUI 和 RPC 下均可用的对话框方法 (<code>select</code>、<code>confirm</code>、<code>input</code>、<code>notify</code>)。</p>
+</section>
+
+<section id="sec-7b80cf5e">
+<h2 id="sec-7b80cf5e">扩展加载机制</h2>
+<p>扩展通过 <code>loader.ts</code> 的 <code>discoverAndLoadExtensions</code> 函数按以下优先级发现：</p>
+<ol>
+<li>项目本地: <code>&lt;cwd&gt;/.pi/extensions/</code> 下的 <code>.ts</code>/<code>.js</code> 文件或子目录 (含 <code>index.ts</code> 或 <code>package.json</code> 的 <code>pi.extensions</code> 清单)</li>
+<li>全局: <code>~/.pi/agent/extensions/</code> 下的同类结构</li>
+<li>显式配置: <code>settings.json</code> 的 <code>extensions</code> 数组和 CLI <code>-e</code> 标志</li>
+</ol>
+<p>每个扩展模块的默认导出工厂函数接收 <code>ExtensionAPI</code>，同步或异步初始化均可。异步工厂在 <code>session_start</code> 之前完成，适合一次性远程配置拉取 (如 <code>pi.registerProvider</code> 动态注册模型)。</p>
+<p>扩展加载器通过 jiti 的 <code>virtualModules</code> (Bun 二进制) 或 <code>alias</code> (Node.js 开发) 提供对核心包的零配置导入。npm 依赖也受支持：扩展目录下的 <code>node_modules</code> 自动可用，pi package 安装时执行 <code>npm install --omit=dev</code>。</p>
+<p><code>ExtensionRunner.bindCore()</code> 将运行时 action (sendMessage、appendEntry 等) 绑定到共享的 <code>ExtensionRuntime</code> 对象。<code>bindCore</code> 也会刷新扩展加载期间排队的 <code>registerProvider</code> 调用。<code>bindCommandContext()</code> 提供命令处理器专属方法 (newSession、fork 等)。</p>
+</section>
+
+<section id="extensions-md-1b6f155e">
+<h2 id="extensions-md-1b6f155e">与 extensions.md 的关系</h2>
+<p>本文档聚焦于扩展系统的<strong>架构设计和事件流</strong>。完整的 API 签名、参数类型、返回值结构和代码示例请参考 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">extensions.md</a>，包括：</p>
+<ul>
+<li>每个事件的完整 TypeScript 接口定义</li>
+<li><code>ExtensionAPI</code> 的完整方法签名</li>
+<li><code>ExtensionUIContext</code> 的所有 UI 方法</li>
+<li><code>ToolDefinition</code>、<code>ProviderConfig</code> 等类型定义</li>
+<li>所有内置工具事件的类型守卫 (<code>isToolCallEventType</code> 等)</li>
+<li>扩展状态管理 (<code>appendEntry</code>、<code>sendMessage</code>)</li>
+<li>完整的代码示例 (permission gate、custom compaction、provider registration 等)</li>
+</ul>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="pi-orchestrator.html">← pi-orchestrator</a>
+  <a class="next" href="session-and-compaction.html">会话与压缩 →</a>
+</div>
+</main>
+</body>
+</html>

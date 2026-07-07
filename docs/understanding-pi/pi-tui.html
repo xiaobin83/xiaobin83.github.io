@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-tui 包设计 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">pi-tui</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a class="current" href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-f7a18b17">架构概览</a></li>
+      <li><a href="#tui-1dc35b6c">TUI 主类与差分渲染</a></li>
+      <li><a href="#terminal-1a72c762">Terminal 接口与键盘协议</a></li>
+      <li><a href="#sec-9092c715">键盘输入系统</a></li>
+      <li><a href="#sec-40fb9f22">组件系统</a></li>
+      <li><a href="#sec-c979c28a">自动补全系统</a></li>
+      <li><a href="#sec-dd00ff71">终端图像渲染</a></li>
+      <li><a href="#sec-2ac18c98">工具函数</a></li>
+      <li><a href="#native-d3662dcd">native/ 平台原生模块</a></li>
+      <li><a href="#sec-7838e1a4">与上层的关系</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>pi-tui 终端 UI 框架设计</h1>
+<p><code>@earendil-works/pi-tui</code>（源码 <code>packages/tui/</code>）是 Pi monorepo 的终端 UI 框架层，提供差分渲染（differential rendering）、组件系统和键盘输入处理。它是整个 Pi 技术栈的最底层包，无 workspace 依赖，被 <code>pi-coding-agent</code> 直接依赖。</p>
+</section>
+
+<section id="sec-f7a18b17">
+<h2 id="sec-f7a18b17">架构概览</h2>
+<pre><code>┌──────────────────────────────────────────────────────────┐
+│                       TUI (Container)                     │
+│  ┌─────────┐  ┌──────────┐  ┌────────────┐              │
+│  │ 差分渲染 │  │ overlay  │  │ focus 管理  │              │
+│  │ 3 策略   │  │ 栈系统   │  │ IME 光标   │              │
+│  └────┬────┘  └────┬─────┘  └─────┬──────┘              │
+│       │            │              │                       │
+│  ┌────┴────────────┴──────────────┴──────┐               │
+│  │            Component 树               │               │
+│  │  Container -&gt; children[]              │               │
+│  │  Text / Editor / SelectList / ...     │               │
+│  └────────────────┬──────────────────────┘               │
+│                   │                                      │
+│  ┌────────────────┴──────────────────────┐               │
+│  │           Terminal 接口               │               │
+│  │  ProcessTerminal / VirtualTerminal    │               │
+│  │  ┌──────────┐  ┌───────────────────┐  │               │
+│  │  │ 键盘协议 │  │  StdinBuffer      │  │               │
+│  │  │ Kitty/   │  │  序列拆分/粘贴处理 │  │               │
+│  │  │ modify-  │  └───────────────────┘  │               │
+│  │  │ OtherKeys│                         │               │
+│  │  └──────────┘                         │               │
+│  └───────────────────────────────────────┘               │
+└──────────────────────────────────────────────────────────┘
+</code></pre>
+<p>核心文件组织：</p>
+<pre><code>packages/tui/src/
+├── tui.ts              # TUI 主类、Component 接口、Container、overlay 系统
+├── terminal.ts         # Terminal 接口、ProcessTerminal、键盘协议协商
+├── keys.ts             # matchesKey、Key 助手、Kitty 协议解析
+├── keybindings.ts      # 可配置的全局按键绑定注册表
+├── autocomplete.ts     # CombinedAutocompleteProvider
+├── terminal-image.ts   # Kitty/iTerm2 图像渲染
+├── utils.ts            # visibleWidth、truncateToWidth、wrapTextWithAnsi
+├── stdin-buffer.ts     # 输入缓冲与序列拆分
+├── kill-ring.ts        # Emacs 风格 kill/yank
+├── undo-stack.ts       # 通用撤销栈
+├── word-navigation.ts  # 词级光标移动
+├── fuzzy.ts            # 模糊匹配
+├── terminal-colors.ts  # OSC 11 背景色查询
+├── native-modifiers.ts # macOS 修饰键检测
+├── native/             # 平台原生模块
+│   ├── darwin/         # macOS 修饰键检测（native addon）
+│   └── win32/          # Windows VT 输入启用（native addon）
+└── components/         # 12 个内置组件
+    ├── text.ts
+    ├── truncated-text.ts
+    ├── input.ts
+    ├── editor.ts
+    ├── markdown.ts
+    ├── loader.ts
+    ├── cancellable-loader.ts
+    ├── select-list.ts
+    ├── settings-list.ts
+    ├── box.ts
+    ├── image.ts
+    └── spacer.ts
+</code></pre>
+</section>
+
+<section id="tui-1dc35b6c">
+<h2 id="tui-1dc35b6c">TUI 主类与差分渲染</h2>
+<p><code>TUI</code>（<code>packages/tui/src/tui.ts</code>）是整个框架的核心，继承自 <code>Container</code>，管理组件树、渲染循环、焦点和 overlay 系统。</p>
+<h3>Component 接口</h3>
+<p>所有 UI 组件实现 <code>Component</code> 接口（<code>packages/tui/src/tui.ts</code>）：</p>
+<pre><code class="language-typescript">export interface Component {
+  render(width: number): string[];  // 每行宽度必须 &lt;= width
+  handleInput?(data: string): void; // 键盘输入（仅获得焦点时调用）
+  wantsKeyRelease?: boolean;         // 是否接收按键释放事件（Kitty 协议 flag 2）
+  invalidate(): void;                // 清除缓存渲染状态
+}
+</code></pre>
+<p><code>render()</code> 返回字符串数组（每行一个），每行可见宽度不得超出 <code>width</code> 参数，否则 TUI 会报错。TUI 在每行末尾自动追加 SGR reset 和 OSC 8 reset，因此样式不会跨行继承。</p>
+<h3>Focusable 接口与 IME 光标</h3>
+<p><code>Focusable</code> 接口（<code>packages/tui/src/tui.ts</code>）支持 IME（输入法）候选窗口定位：</p>
+<pre><code class="language-typescript">export interface Focusable {
+  focused: boolean;  // TUI 在焦点变化时设置
+}
+
+// 零宽度 APC 序列，组件在光标位置输出
+export const CURSOR_MARKER = &quot;\x1b_pi:c\x07&quot;;
+</code></pre>
+<p>当 <code>Focusable</code> 组件获得焦点时，TUI 会：
+1. 设置 <code>focused = true</code>
+2. 扫描渲染输出中的 <code>CURSOR_MARKER</code>，计算其可视列位置
+3. 将硬件终端光标定位到该位置（用于 IME 候选窗口定位）</p>
+<p>通过 <code>PI_HARDWARE_CURSOR=1</code> 环境变量或 <code>setShowHardwareCursor(true)</code> 启用可见硬件光标。<code>Editor</code> 和 <code>Input</code> 组件已内置实现该接口。</p>
+<h3>差分渲染三策略</h3>
+<p><code>doRender()</code>（<code>packages/tui/src/tui.ts</code>）根据场景选择三种渲染策略：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>触发条件</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>首次渲染</strong></td>
+<td><code>previousLines.length === 0</code> 且无宽高变化</td>
+<td>直接输出所有行，不清除屏幕</td>
+</tr>
+<tr>
+<td><strong>宽度变化/变化超出视口</strong></td>
+<td>终端宽度改变 或 首个变化行在视口上方 或 内容收缩</td>
+<td>全屏清除后完整重绘</td>
+</tr>
+<tr>
+<td><strong>正常更新</strong></td>
+<td>仅部分行内容变化</td>
+<td>光标移动到首个变化行，清除到末尾，仅渲染变化行</td>
+</tr>
+</tbody>
+</table>
+<p>所有渲染更新均包裹在 <strong>CSI 2026 同步输出</strong>（<code>\x1b[?2026h</code> ... <code>\x1b[?2026l</code>）中，保证原子性无闪烁渲染。渲染循环使用 16ms 最小间隔（<code>MIN_RENDER_INTERVAL_MS</code>）防止过度重绘。</p>
+<h3>Overlay 系统</h3>
+<p><code>TUI.showOverlay(component, options?)</code>（<code>packages/tui/src/tui.ts</code>）在现有内容之上叠加模态组件，返回 <code>OverlayHandle</code> 控制生命周期：</p>
+<ul>
+<li><strong>定位</strong>：支持 9 种锚点（<code>center</code>、<code>top-left</code>、<code>bottom-right</code> 等）、绝对坐标、百分比坐标和边距</li>
+<li><strong>尺寸</strong>：<code>width</code>（绝对或百分比）、<code>minWidth</code>、<code>maxHeight</code></li>
+<li><strong>响应式可见性</strong>：<code>visible(termWidth, termHeight)</code> 回调按终端尺寸控制显隐</li>
+<li><strong>焦点管理</strong>：<code>overlayStack</code> 按 <code>focusOrder</code> 排序，顶部可见 overlay 自动获得焦点；<code>nonCapturing: true</code> 可跳过焦点抢占</li>
+<li><strong>焦点恢复</strong>：底层组件重新获得焦点时，overlay 的焦点恢复状态（<code>overlayFocusRestore</code>）决定是否自动重新聚焦 overlay</li>
+</ul>
+<p><code>OverlayHandle</code> 提供 <code>hide()</code>（永久移除）、<code>setHidden()</code>（临时隐藏）、<code>focus()</code>、<code>unfocus()</code> 等方法。<code>Container</code> 定义在 <code>tui.ts</code> 而非 <code>components/</code> 目录，是组件树的根节点，递归渲染 <code>children</code>。</p>
+</section>
+
+<section id="terminal-1a72c762">
+<h2 id="terminal-1a72c762">Terminal 接口与键盘协议</h2>
+<h3>Terminal 接口</h3>
+<p><code>Terminal</code> 接口（<code>packages/tui/src/terminal.ts</code>）抽象终端 I/O，TUI 通过该接口与任何终端实现交互：</p>
+<pre><code class="language-typescript">export interface Terminal {
+  start(onInput: (data: string) =&gt; void, onResize: () =&gt; void): void;
+  stop(): void;
+  write(data: string): void;
+  get columns(): number;
+  get rows(): number;
+  moveBy(lines: number): void;
+  hideCursor(): void;
+  showCursor(): void;
+  clearLine(): void;
+  clearFromCursor(): void;
+  clearScreen(): void;
+}
+</code></pre>
+<p><strong><code>ProcessTerminal</code></strong>（<code>packages/tui/src/terminal.ts</code>）是默认实现，使用 <code>process.stdin/stdout</code>。启动时执行以下初始化流程：</p>
+<ol>
+<li>启用 raw mode（<code>setRawMode(true)</code>）</li>
+<li>启用 <strong>bracketed paste mode</strong>（<code>\x1b[?2004h</code>）——终端将粘贴内容包裹在 <code>\x1b[200~</code> ... <code>\x1b[201~</code> 中</li>
+<li>查询并启用 <strong>Kitty 键盘协议</strong>（渐进增强检测）</li>
+<li>在 Windows 上启用 <code>ENABLE_VIRTUAL_TERMINAL_INPUT</code>（通过 <code>native/win32/</code> 原生模块）</li>
+<li>建立 <code>StdinBuffer</code> 进行输入缓冲与序列拆分</li>
+</ol>
+<p><strong><code>VirtualTerminal</code></strong> 基于 <code>@xterm/headless</code>，用于测试环境。</p>
+<h3>Kitty 键盘协议协商</h3>
+<p><code>ProcessTerminal</code> 在启动时发送渐进增强查询（<code>packages/tui/src/terminal.ts</code>）：</p>
+<pre><code>\x1b[&gt;7u    &lt;- 请求 flags: 1(disambiguate) + 2(event types) + 4(alternate keys)
+\x1b[?u     &lt;- 查询当前 flags
+\x1b[c      &lt;- DA 查询（作为哨兵，不支持 Kitty 协议的终端会先响应 DA）
+</code></pre>
+<p>请求的 flags 含义：
+- <strong>flag 1</strong>：消除转义码歧义（所有按键都以 CSI u 格式发送）
+- <strong>flag 2</strong>：报告事件类型（press/repeat/release）
+- <strong>flag 4</strong>：报告 alternate keys（shift 后的字符 + 物理布局键码）</p>
+<p>如果终端响应 Kitty flags，则激活 Kitty 协议。如果先收到 DA 响应，则回退到 <strong>modifyOtherKeys</strong>（<code>\x1b[&gt;4;2m</code>）。停止时发送 <code>\x1b[&lt;u</code> 关闭协议。</p>
+<p><code>drainInput()</code> 在退出前排空 stdin，防止 Kitty 按键释放事件通过慢速 SSH 连接泄漏到父 shell。</p>
+<h3>StdinBuffer</h3>
+<p><code>StdinBuffer</code>（<code>packages/tui/src/stdin-buffer.ts</code>）将 stdin 数据拆分为完整序列。因为 stdin data 事件可能分片到达（尤其对于 escape 序列），缓冲累积不完整序列，通过超时（默认 10ms）机制刷新：</p>
+<ul>
+<li>识别完整的 CSI、OSC、DCS、APC、SS3 序列</li>
+<li>特殊处理 bracketed paste（<code>\x1b[200~</code> ... <code>\x1b[201~</code>），paste 内容作为 <code>paste</code> 事件发出</li>
+<li>处理 WezTerm 下 Escape 键 press/release 的拼接问题</li>
+</ul>
+</section>
+
+<section id="sec-9092c715">
+<h2 id="sec-9092c715">键盘输入系统</h2>
+<h3>keys.ts：matchesKey 与 Kitty 协议解析</h3>
+<p><code>keys.ts</code>（<code>packages/tui/src/keys.ts</code>）是键盘输入处理的核心，支持三种协议路径：</p>
+<ol>
+<li><strong>Kitty 键盘协议</strong>（CSI u 格式）：<code>\x1b[codepoint;modifier:eventu</code></li>
+<li><strong>modifyOtherKeys</strong>（xterm 格式）：<code>\x1b[27;modifier;codepoint~</code></li>
+<li><strong>Legacy 序列</strong>：传统 ANSI escape 序列（<code>\x1b[A</code> = up 等）</li>
+</ol>
+<p><code>matchesKey(data, keyId)</code> 按优先级依次匹配三种协议，对字母键进行 <code>normalizeShiftedLetterIdentityCodepoint</code> 归一化（shift+字母 → 小写 codepoint），并对非拉丁键盘布局通过 <code>baseLayoutKey</code> 回退匹配。<code>parseKey(data)</code> 反向解析原始输入为 key identifier 字符串。</p>
+<p><strong><code>Key</code> 助手对象</strong>提供类型安全的键标识符创建：</p>
+<pre><code class="language-typescript">Key.escape          // &quot;escape&quot;
+Key.ctrl(&quot;c&quot;)       // &quot;ctrl+c&quot;
+Key.ctrlShift(&quot;p&quot;)  // &quot;ctrl+shift+p&quot;
+Key.super(&quot;k&quot;)      // &quot;super+k&quot;
+</code></pre>
+<p><code>isKeyRelease(data)</code> 通过检测 Kitty 协议 event type 标记（<code>:3</code> 后缀）识别按键释放事件。<code>decodeKittyPrintable(data)</code> 从 Kitty CSI-u 序列中提取可打印字符。</p>
+<h3>keybindings.ts：可配置按键绑定</h3>
+<p><code>KeybindingsManager</code>（<code>packages/tui/src/keybindings.ts</code>）提供全局按键绑定注册表，支持用户自定义覆盖默认按键。默认绑定（<code>TUI_KEYBINDINGS</code>）涵盖：</p>
+<ul>
+<li><strong>Editor 导航/编辑</strong>：<code>tui.editor.cursorUp/Down/Left/Right</code>、<code>tui.editor.deleteWordBackward</code>（<code>ctrl+w</code>/<code>alt+backspace</code>）、<code>tui.editor.jumpForward</code>（<code>ctrl+]</code>）、<code>tui.editor.jumpBackward</code>（<code>ctrl+alt+]</code>）、<code>tui.editor.undo</code>（<code>ctrl+-</code>）、<code>tui.editor.yank</code>（<code>ctrl+y</code>）/<code>yankPop</code>（<code>alt+y</code>）等</li>
+<li><strong>通用输入</strong>：<code>tui.input.newLine</code>（<code>shift+enter</code>/<code>ctrl+j</code>）、<code>tui.input.submit</code>（<code>enter</code>）、<code>tui.input.tab</code>（<code>tab</code>）</li>
+<li><strong>选择操作</strong>：<code>tui.select.up/down</code>、<code>tui.select.confirm</code>（<code>enter</code>）、<code>tui.select.cancel</code>（<code>escape</code>/<code>ctrl+c</code>）</li>
+</ul>
+<p>通过声明合并（declaration merging），下游包可扩展 <code>Keybindings</code> 接口添加自定义绑定。冲突检测会报告同一按键映射到多个绑定的情况。</p>
+</section>
+
+<section id="sec-40fb9f22">
+<h2 id="sec-40fb9f22">组件系统</h2>
+<p>pi-tui 提供 13 个内置组件：12 个在 <code>packages/tui/src/components/</code> 目录，<code>Container</code> 在 <code>tui.ts</code> 中定义。</p>
+<h3>Text 与 TruncatedText</h3>
+<p><strong>Text</strong>（<code>packages/tui/src/components/text.ts</code>）显示多行文本，支持自动换行、内边距和自定义背景色函数。通过 <code>setText()</code> 动态更新内容。</p>
+<p><strong>TruncatedText</strong>（<code>packages/tui/src/components/truncated-text.ts</code>）单行文本，超出视口宽度时截断并追加省略号。适用于状态栏和标题行。</p>
+<h3>Input</h3>
+<p><strong>Input</strong>（<code>packages/tui/src/components/input.ts</code>）单行文本输入，支持水平滚动、<code>onSubmit</code> 回调。内置 Emacs 风格键绑定（<code>ctrl+a/e</code> 行首/尾、<code>ctrl+w</code> 删除单词、<code>ctrl+u/k</code> 删除到行首/尾）和词级导航（<code>ctrl+left/right</code>、<code>alt+left/right</code>）。</p>
+<h3>Editor</h3>
+<p><strong>Editor</strong>（<code>packages/tui/src/components/editor.ts</code>）是多行文本编辑器的核心实现。主要特性：</p>
+<ul>
+<li><strong>多行编辑与自动换行</strong>：基于 Unicode 字素分割（<code>Intl.Segmenter</code>）的精确换行，通过 <code>segmentWithMarkers()</code> 将 paste marker 作为原子字素处理</li>
+<li><strong>自动补全</strong>：集成 <code>CombinedAutocompleteProvider</code>，支持斜杠命令和文件路径补全</li>
+<li><strong>Paste marker</strong>：超过 10 行的粘贴内容被折叠为 <code>[paste #N +M lines]</code> 标记，作为不可部分操作的原子单位</li>
+<li><strong>Kill ring</strong>（<code>packages/tui/src/kill-ring.ts</code>）：Emacs 风格 kill/yank，连续删除累积到同一条目，<code>yankPop</code>（<code>alt+y</code>）循环历史</li>
+<li><strong>Undo/Redo</strong>：基于 <code>UndoStack</code>（<code>packages/tui/src/undo-stack.ts</code>），每次编辑操作前 push <code>structuredClone</code> 快照，<code>ctrl+-</code> 触发 undo</li>
+<li><strong>Jump-to-char</strong>：<code>ctrl+]</code> 向前跳转到指定字符，<code>ctrl+alt+]</code> 向后跳转</li>
+<li><strong>主题支持</strong>：<code>EditorTheme</code> 接口控制边框颜色和下拉列表样式</li>
+</ul>
+<h3>Markdown</h3>
+<p><strong>Markdown</strong>（<code>packages/tui/src/components/markdown.ts</code>）将 Markdown 文本渲染为 ANSI 样式行。支持标题、粗体、斜体、代码块（可选语法高亮 <code>highlightCode</code>）、列表、链接、引用块、分割线等。HTML 标签以纯文本形式渲染。内部缓存渲染结果，<code>invalidate()</code> 清除缓存。</p>
+<h3>Loader 与 CancellableLoader</h3>
+<p><strong>Loader</strong>（<code>packages/tui/src/components/loader.ts</code>）动画加载旋转器，通过定时器触发 <code>tui.requestRender()</code> 实现动画帧更新。<code>setMessage()</code> 动态更新提示文本。</p>
+<p><strong>CancellableLoader</strong>（<code>packages/tui/src/components/cancellable-loader.ts</code>）扩展 <code>Loader</code>，添加 <code>Escape</code> 键监听和 <code>AbortSignal</code> 支持。<code>signal</code> 属性在用户按 Escape 时被 abort，<code>onAbort</code> 回调通知调用方取消异步操作。</p>
+<h3>SelectList 与 SettingsList</h3>
+<p><strong>SelectList</strong>（<code>packages/tui/src/components/select-list.ts</code>）交互式选择列表。支持键盘导航（方向键）、<code>Enter</code> 确认、<code>Escape</code> 取消、<code>onSelectionChange</code> 高亮回调。<code>maxVisible</code> 控制可见项数，超出时显示滚动信息。</p>
+<p><strong>SettingsList</strong>（<code>packages/tui/src/components/settings-list.ts</code>）设置面板，支持值循环（<code>values</code> 数组）和子菜单（<code>submenu</code> 函数返回 <code>Component</code>）。方向键导航，<code>Enter</code>/<code>Space</code> 激活当前项。</p>
+<h3>Box</h3>
+<p><strong>Box</strong>（<code>packages/tui/src/components/box.ts</code>）带内边距和背景色的容器。构造参数 <code>paddingX</code>、<code>paddingY</code> 和 <code>bgFn</code> 函数（为每一行应用背景色）。<code>setBgFn()</code> 动态更换背景色。</p>
+<h3>Image</h3>
+<p><strong>Image</strong>（<code>packages/tui/src/components/image.ts</code>）终端内联图像渲染。支持 Kitty（<code>\x1b_G...</code>）和 iTerm2（<code>\x1b]1337;File=...</code>）图形协议，不支持的终端回退到文本占位符。支持 PNG、JPEG、GIF、WebP 格式，从二进制头部自动解析尺寸。通过 <code>maxWidthCells</code>/<code>maxHeightCells</code> 限制渲染尺寸。</p>
+<h3>Spacer</h3>
+<p><strong>Spacer</strong>（<code>packages/tui/src/components/spacer.ts</code>）垂直空白行，构造参数为行数（默认 1）。</p>
+<h3>Container</h3>
+<p><strong>Container</strong>（<code>packages/tui/src/tui.ts</code>）组件树的根节点和分组容器。<code>children</code> 数组按序递归渲染，提供 <code>addChild()</code>、<code>removeChild()</code>、<code>clear()</code> 方法。<code>TUI</code> 继承自 <code>Container</code>。</p>
+</section>
+
+<section id="sec-c979c28a">
+<h2 id="sec-c979c28a">自动补全系统</h2>
+<p><code>CombinedAutocompleteProvider</code>（<code>packages/tui/src/autocomplete.ts</code>）统一处理斜杠命令和文件路径补全：</p>
+<ul>
+<li><strong>斜杠命令</strong>：输入 <code>/</code> 触发，从命令列表模糊匹配（使用 <code>fuzzyFilter</code>）</li>
+<li><strong>命令参数补全</strong>：命令对象的 <code>getArgumentCompletions(argumentPrefix)</code> 方法提供上下文补全</li>
+<li><strong>文件路径</strong>：Tab 键触发，使用 <code>readdirSync</code> 同步枚举目录</li>
+<li><strong><code>@</code> 前缀模糊搜索</strong>：使用外部 <code>fd</code> 工具递归搜索文件树（尊重 <code>.gitignore</code>），适合大项目快速文件定位</li>
+<li><strong>引号处理</strong>：自动处理 <code>"path with spaces"</code> 和 <code>@"file name"</code> 格式</li>
+</ul>
+</section>
+
+<section id="sec-dd00ff71">
+<h2 id="sec-dd00ff71">终端图像渲染</h2>
+<p><code>terminal-image.ts</code>（<code>packages/tui/src/terminal-image.ts</code>）实现终端内联图像渲染：</p>
+<ul>
+<li><strong>能力检测</strong>：通过 <code>TERM_PROGRAM</code>、<code>KITTY_WINDOW_ID</code>、<code>ITERM_SESSION_ID</code> 等环境变量识别终端类型，支持 Kitty、Ghostty、WezTerm、Warp（Kitty 协议）和 iTerm2</li>
+<li><strong>Kitty 协议</strong>：<code>encodeKitty()</code> 生成 <code>\x1b_Ga=T,f=100,q=2,c=...;base64\x1b\\</code> 格式，分块传输（4096 字节/块）</li>
+<li><strong>iTerm2 协议</strong>：<code>encodeITerm2()</code> 生成 <code>\x1b]1337;File=inline=1;...;base64\x07</code> 格式</li>
+<li><strong>尺寸计算</strong>：<code>calculateImageCellSize()</code> 基于终端 cell 像素尺寸（通过 CSI 16 t 查询）计算目标行列数</li>
+<li><strong>图像管理</strong>：<code>allocateImageId()</code> 分配随机 ID，<code>deleteKittyImage()</code> 和 <code>deleteAllKittyImages()</code> 管理 Kitty 图像生命周期</li>
+<li><strong>超链接</strong>：<code>hyperlink()</code> 生成 OSC 8 格式的可点击超链接</li>
+</ul>
+</section>
+
+<section id="sec-2ac18c98">
+<h2 id="sec-2ac18c98">工具函数</h2>
+<h3>utils.ts</h3>
+<p><code>utils.ts</code>（<code>packages/tui/src/utils.ts</code>）提供核心字符串处理函数：</p>
+<ul>
+<li><strong><code>visibleWidth(str)</code></strong>：计算字符串在终端中的可见宽度，基于 <code>Intl.Segmenter</code> 字素分割和 <code>get-east-asian-width</code> 库，正确处理全角字符、emoji、ANSI 转义码</li>
+<li><strong><code>truncateToWidth(text, maxWidth, ellipsis?, pad?)</code></strong>：按可见宽度截断字符串，保留 ANSI 码完整性</li>
+<li><strong><code>wrapTextWithAnsi(text, width)</code></strong>：自动换行，保留 ANSI 样式跨行，正确处理 OSC 8 超链接</li>
+<li><strong><code>extractSegments()</code></strong>：单次遍历提取行中 "before" 和 "after" 片段，用于 overlay 合成</li>
+<li><strong><code>sliceByColumn()</code></strong>：按列位置切片，处理宽字符边界</li>
+<li><strong><code>normalizeTerminalOutput()</code></strong>：归一化泰文/老挝文 AM 元音的组合形式</li>
+</ul>
+<h3>fuzzy.ts</h3>
+<p><code>fuzzy.ts</code>（<code>packages/tui/src/fuzzy.ts</code>）实现模糊匹配算法，支持多 token（空格/斜杠分隔）、字母-数字互换匹配、词边界加分、连续匹配加分。</p>
+<h3>stdin-buffer.ts</h3>
+<p><code>StdinBuffer</code>（<code>packages/tui/src/stdin-buffer.ts</code>）缓冲 stdin 输入并拆分为完整序列。基于 OpenTUI 实现（MIT 协议），处理 CSI、OSC、DCS、APC 序列的完整性判断，支持 bracketed paste 模式。</p>
+<h3>kill-ring.ts</h3>
+<p><code>KillRing</code>（<code>packages/tui/src/kill-ring.ts</code>）Emacs 风格 kill ring。<code>push(text, opts)</code> 支持累积模式（连续删除合并），<code>rotate()</code> 实现 yank-pop 循环。</p>
+<h3>undo-stack.ts</h3>
+<p><code>UndoStack&lt;S&gt;</code>（<code>packages/tui/src/undo-stack.ts</code>）通用撤销栈，push 时自动 <code>structuredClone</code> 深拷贝状态快照。</p>
+<h3>word-navigation.ts</h3>
+<p><code>word-navigation.ts</code>（<code>packages/tui/src/word-navigation.ts</code>）提供 <code>findWordBackward()</code> 和 <code>findWordForward()</code>，基于 <code>Intl.Segmenter</code> 词分割实现词级光标移动，支持原子段（paste marker）和标点边界。</p>
+</section>
+
+<section id="native-d3662dcd">
+<h2 id="native-d3662dcd">native/ 平台原生模块</h2>
+<p><code>packages/tui/native/</code> 包含两个平台的原生 Node.js addon：</p>
+<ul>
+<li><strong><code>native/darwin/</code></strong>（<code>darwin-modifiers.node</code>）：macOS 修饰键实时检测。<code>isNativeModifierPressed()</code>（<code>packages/tui/src/native-modifiers.ts</code>）查询 <code>shift</code>/<code>command</code>/<code>control</code>/<code>option</code> 键的物理按下状态。用于 Apple Terminal 下区分 <code>Shift+Enter</code>（原生 <code>\r</code> 无法区分）</li>
+<li><strong><code>native/win32/</code></strong>（<code>win32-console-mode.node</code>）：Windows 控制台模式设置。<code>enableVirtualTerminalInput()</code> 向 stdin 句柄添加 <code>ENABLE_VIRTUAL_TERMINAL_INPUT</code>（0x0200）标志，使 Windows Terminal 发送 VT 转义序列而非原始控制台事件（否则 <code>Shift+Tab</code> 会丢失修饰键信息变为普通 <code>\t</code>）</li>
+</ul>
+</section>
+
+<section id="sec-7838e1a4">
+<h2 id="sec-7838e1a4">与上层的关系</h2>
+<p><code>pi-tui</code> 被 <code>pi-coding-agent</code> 直接依赖（<code>packages/coding-agent/package.json</code>）。上层通过 <code>TUI</code> + <code>ProcessTerminal</code> 组合创建交互式终端界面，使用 <code>Editor</code> 作为主输入组件，<code>Markdown</code> 渲染 AI 响应，<code>Loader</code>/<code>CancellableLoader</code> 显示加载状态，<code>SelectList</code> 实现选项菜单，<code>showOverlay()</code> 实现弹窗和对话框。</p>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="pi-coding-agent.html">← pi-coding-agent</a>
+  <a class="next" href="pi-orchestrator.html">pi-orchestrator →</a>
+</div>
+</main>
+</body>
+</html>

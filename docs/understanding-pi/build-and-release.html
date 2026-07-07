@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 构建与发布 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">构建与发布</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a class="current" href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#monorepo-c0388e7e">Monorepo 工具链</a></li>
+      <li><a href="#sec-a2ae15f8">构建流程</a></li>
+      <li><a href="#sec-20c94dad">检查管道</a></li>
+      <li><a href="#scripts-07411c65">scripts/ 目录</a></li>
+      <li><a href="#ci-e65ec1ac">CI 工作流</a></li>
+      <li><a href="#sec-40d46d4e">发布流程</a></li>
+      <li><a href="#sec-5f5e3cdd">供应链安全</a></li>
+      <li><a href="#sec-ee4989c2">相关文档</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>构建与发布</h1>
+<p>本文档描述 pi-monorepo 的构建系统、检查管道、发布流程及供应链安全策略。</p>
+</section>
+
+<section id="monorepo-c0388e7e">
+<h2 id="monorepo-c0388e7e">Monorepo 工具链</h2>
+<p>项目基于 npm workspaces 管理多包结构，workspace 定义在根 <code>package.json</code> 的 <code>workspaces</code> 字段：</p>
+<ul>
+<li><code>packages/*</code>（tui、ai、agent、coding-agent、orchestrator）</li>
+<li><code>packages/coding-agent/examples/extensions/</code> 下的扩展包</li>
+</ul>
+<p>核心工具链选型：</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>用途</th>
+<th>配置文件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>npm workspaces</strong></td>
+<td>包管理与依赖安装</td>
+<td><code>package.json</code> (workspaces)</td>
+</tr>
+<tr>
+<td><strong>Biome</strong></td>
+<td>代码格式化和 lint</td>
+<td><code>biome.json</code></td>
+</tr>
+<tr>
+<td><strong>tsgo</strong> (<code>@typescript/native-preview</code>)</td>
+<td>TypeScript 类型检查</td>
+<td><code>tsconfig.base.json</code></td>
+</tr>
+<tr>
+<td><strong>vitest</strong></td>
+<td>单元测试</td>
+<td>各包内 <code>vitest.config.ts</code></td>
+</tr>
+<tr>
+<td><strong>esbuild</strong></td>
+<td>浏览器兼容性冒烟测试</td>
+<td>通过 <code>scripts/check-browser-smoke.mjs</code> 调用</td>
+</tr>
+<tr>
+<td><strong>husky</strong></td>
+<td>Git hooks 管理</td>
+<td><code>.husky/pre-commit</code></td>
+</tr>
+</tbody>
+</table>
+<p>所有外部直接依赖使用精确版本号，通过 <code>scripts/check-pinned-deps.mjs</code> 强制执行。内部 workspace 包（<code>@earendil-works/pi-*</code>）保持版本范围引用。</p>
+</section>
+
+<section id="sec-a2ae15f8">
+<h2 id="sec-a2ae15f8">构建流程</h2>
+<p>构建脚本定义在根 <code>package.json</code> 的 <code>scripts.build</code>：</p>
+<pre><code>cd packages/tui &amp;&amp; npm run build &amp;&amp;
+cd ../ai &amp;&amp; npm run build &amp;&amp;
+cd ../agent &amp;&amp; npm run build &amp;&amp;
+cd ../coding-agent &amp;&amp; npm run build &amp;&amp;
+cd ../orchestrator &amp;&amp; npm run build
+</code></pre>
+<p>构建顺序由依赖关系决定：</p>
+<ol>
+<li><strong>tui</strong> — 终端 UI 库，无内部依赖</li>
+<li><strong>ai</strong> — 多供应商 LLM API 统一层，无内部依赖</li>
+<li><strong>agent</strong> — Agent 运行时，依赖 ai</li>
+<li><strong>coding-agent</strong> — 交互式编码 agent CLI，依赖 tui、ai、agent</li>
+<li><strong>orchestrator</strong> — 编排层，依赖 coding-agent</li>
+</ol>
+<p>各包构建命令通过 <code>npm run clean</code> 清理旧产物后执行 <code>tsc -p tsconfig.build.json</code> 编译 TypeScript。使用 <code>erasableSyntaxOnly</code> 模式，Node.js 可直接运行编译产物无需额外转译。</p>
+</section>
+
+<section id="sec-20c94dad">
+<h2 id="sec-20c94dad">检查管道</h2>
+<p><code>npm run check</code> 执行 7 步检查，按顺序串联：</p>
+<pre><code>biome check --write --error-on-warnings . &amp;&amp;
+npm run check:pinned-deps &amp;&amp;
+npm run check:ts-imports &amp;&amp;
+npm run check:shrinkwrap &amp;&amp;
+npm run check:install-lock:coding-agent &amp;&amp;
+tsgo --noEmit &amp;&amp;
+npm run check:browser-smoke
+</code></pre>
+<h3>1. Biome 格式化和 Lint (<code>biome check --write --error-on-warnings</code>)</h3>
+<p>基于 <code>biome.json</code> 配置，对 <code>packages/*/src/**/*.ts</code>、<code>packages/*/test/**/*.ts</code> 和 <code>packages/coding-agent/examples/**/*.ts</code> 执行自动格式化和 lint 检查。<code>--write</code> 自动修复可修复问题，<code>--error-on-warnings</code> 将 warning 升级为 error。排除文件包括 <code>models.generated.ts</code>、<code>*.models.ts</code> 和 <code>test-sessions.ts</code>。</p>
+<h3>2. 依赖版本锁定 (<code>check:pinned-deps</code>)</h3>
+<p><code>scripts/check-pinned-deps.mjs</code> 遍历所有 <code>package.json</code> 文件，验证外部直接依赖（非 <code>@earendil-works/pi-*</code> 前缀、非本地协议）使用精确版本号（<code>x.y.z</code> 格式）。不满足条件时报错退出。</p>
+<h3>3. TypeScript 相对导入检查 (<code>check:ts-imports</code>)</h3>
+<p><code>scripts/check-ts-relative-imports.mjs</code> 使用 TypeScript 编译器 API 解析所有 <code>.ts</code> 文件，检查相对导入是否使用 <code>.js</code> 扩展名——这是 Node.js ESM 的运行时要求。不符合规范的导入路径报错。</p>
+<h3>4. Shrinkwrap 一致性 (<code>check:shrinkwrap</code>)</h3>
+<p><code>scripts/generate-coding-agent-shrinkwrap.mjs --check</code> 验证 <code>packages/coding-agent/npm-shrinkwrap.json</code> 与当前 <code>package-lock.json</code> 一致。shrinkwrap 从根 lockfile 提取 coding-agent 及其传递依赖，确保发布的 CLI 包锁定所有传递依赖版本。</p>
+<h3>5. Install Lock 一致性 (<code>check:install-lock:coding-agent</code>)</h3>
+<p><code>scripts/generate-coding-agent-install-lock.mjs --check</code> 验证 <code>packages/coding-agent/install-lock/</code> 下的 <code>package.json</code> 和 <code>package-lock.json</code> 与当前状态一致。该 lockfile 用于 <code>pi update --self</code> 自更新功能，确保自更新时安装的依赖版本与发布时一致。</p>
+<h3>6. TypeScript 类型检查 (<code>tsgo --noEmit</code>)</h3>
+<p>使用 <code>@typescript/native-preview</code>（基于 Go 的 TypeScript 编译器）对所有包执行完整类型检查。配置继承自 <code>tsconfig.base.json</code>，启用 <code>strict</code>、<code>erasableSyntaxOnly</code> 等严格选项。<code>--noEmit</code> 确保只做类型检查不生成文件。</p>
+<h3>7. 浏览器兼容性冒烟测试 (<code>check:browser-smoke</code>)</h3>
+<p><code>scripts/check-browser-smoke.mjs</code> 使用 esbuild 以浏览器平台目标打包 <code>scripts/browser-smoke-entry.ts</code>。如果打包失败（通常因 Node.js 专用 API 被引用到浏览器路径），则报错。这确保 <code>packages/ai</code> 和 <code>packages/web-ui</code> 的代码保持浏览器兼容性。</p>
+<h3>Pre-commit Hook</h3>
+<p><code>.husky/pre-commit</code> 在每次提交前执行：</p>
+<ol>
+<li>运行 <code>scripts/check-lockfile-commit.mjs</code> 检查 lockfile 提交——除非设置 <code>PI_ALLOW_LOCKFILE_CHANGE=1</code>，否则阻止 <code>package-lock.json</code> 被意外提交</li>
+<li>执行完整的 <code>npm run check</code></li>
+<li>如果暂存文件包含 <code>packages/ai/*</code>、<code>packages/web-ui/*</code>、<code>package.json</code> 或 <code>package-lock.json</code>，额外执行 <code>npm run check:browser-smoke</code></li>
+<li>重新暂存被 Biome 格式化修改的文件</li>
+</ol>
+</section>
+
+<section id="scripts-07411c65">
+<h2 id="scripts-07411c65">scripts/ 目录</h2>
+<table>
+<thead>
+<tr>
+<th>脚本</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>release.mjs</code></td>
+<td>发布流程编排：版本 bump -&gt; CHANGELOG 更新 -&gt; 检查 -&gt; 提交+标签 -&gt; 推送</td>
+</tr>
+<tr>
+<td><code>local-release.mjs</code></td>
+<td>本地发布测试：构建、打包 tarball、创建隔离的 npm/Bun 安装用于冒烟测试</td>
+</tr>
+<tr>
+<td><code>publish.mjs</code></td>
+<td>npm 发布：验证构建产物、检查已发布版本、调用 <code>npm publish --provenance</code></td>
+</tr>
+<tr>
+<td><code>sync-versions.js</code></td>
+<td>同步所有 workspace 包的版本号</td>
+</tr>
+<tr>
+<td><code>generate-coding-agent-shrinkwrap.mjs</code></td>
+<td>从根 lockfile 生成 <code>npm-shrinkwrap.json</code>，含 install script 白名单</td>
+</tr>
+<tr>
+<td><code>generate-coding-agent-install-lock.mjs</code></td>
+<td>生成 <code>install-lock/</code> 下的自更新 lockfile</td>
+</tr>
+<tr>
+<td><code>check-pinned-deps.mjs</code></td>
+<td>验证外部依赖使用精确版本</td>
+</tr>
+<tr>
+<td><code>check-ts-relative-imports.mjs</code></td>
+<td>验证 <code>.ts</code> 文件相对导入使用 <code>.js</code> 扩展名</td>
+</tr>
+<tr>
+<td><code>check-browser-smoke.mjs</code></td>
+<td>浏览器兼容性冒烟测试（esbuild 打包验证）</td>
+</tr>
+<tr>
+<td><code>check-lockfile-commit.mjs</code></td>
+<td>Pre-commit 守卫：阻止未授权的 lockfile 提交</td>
+</tr>
+<tr>
+<td><code>cost.ts</code></td>
+<td>成本统计工具</td>
+</tr>
+<tr>
+<td><code>stats.ts</code></td>
+<td>会话统计工具</td>
+</tr>
+<tr>
+<td><code>tool-stats.ts</code></td>
+<td>工具调用统计工具</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section id="ci-e65ec1ac">
+<h2 id="ci-e65ec1ac">CI 工作流</h2>
+<h3>ci.yml — 主 CI 流水线</h3>
+<p>触发条件：<code>main</code> 分支的 push 和 PR。</p>
+<ul>
+<li>单 job (<code>build-check-test</code>)，使用 <code>ubuntu-latest</code></li>
+<li>安装系统依赖（canvas 所需的 cairo、pango、jpeg、gif、rsvg，以及 fd、ripgrep）</li>
+<li><code>npm ci --ignore-scripts</code> 安装依赖</li>
+<li>执行 <code>npm run build</code> -&gt; <code>npm run check</code> -&gt; <code>npm test</code></li>
+<li>使用 concurrency group 取消同一 ref 的重复运行</li>
+</ul>
+<h3>build-binaries.yml — 二进制构建与发布</h3>
+<p>触发条件：推送 <code>v*</code> 标签，或手动 <code>workflow_dispatch</code>。</p>
+<p>四个 job 按序执行：</p>
+<ol>
+<li><strong>build</strong> — 构建 Bun 二进制文件（darwin-arm64/x64、linux-arm64/x64、windows-arm64/x64），生成 SHA256SUMS，打包为 GitHub Release 产物</li>
+<li><strong>stage-github-release</strong> — 创建 draft GitHub Release 并上传二进制资产</li>
+<li><strong>publish-npm</strong> — 通过 GitHub Actions OIDC 的 npm trusted publishing 发布所有包到 npm，使用 <code>environment: npm-publish</code> 保护</li>
+<li><strong>publish-github-release</strong> — 将 draft release 发布为正式 release</li>
+<li><strong>cleanup-draft-github-release</strong> — 如果上述任一步骤失败，清理 draft release</li>
+</ol>
+<h3>npm-audit.yml — 定期安全审计</h3>
+<p>触发条件：每日定时 (<code>37 7 * * *</code>) + 手动触发。</p>
+<ul>
+<li><code>npm audit --omit=dev --audit-level=moderate</code> 审计生产依赖</li>
+<li><code>npm audit signatures --omit=dev</code> 验证 registry 签名完整性</li>
+</ul>
+</section>
+
+<section id="sec-40d46d4e">
+<h2 id="sec-40d46d4e">发布流程</h2>
+<p>发布由 <code>scripts/release.mjs</code> 编排，支持三种 bump 类型：</p>
+<pre><code class="language-bash">npm run release:patch   # 修复和新增
+npm run release:minor   # 破坏性变更
+npm run release:major   # 预留
+</code></pre>
+<h3>发布步骤（<code>scripts/release.mjs</code>）</h3>
+<ol>
+<li><strong>检查工作区</strong> — 确保无未提交更改</li>
+<li><strong>版本 bump</strong> — 调用 <code>npm run version:&lt;type&gt;</code> 更新所有 workspace 包的版本号，通过 <code>scripts/sync-versions.js</code> 同步，刷新 <code>package-lock.json</code></li>
+<li><strong>CHANGELOG 更新</strong> — 将各包 <code>CHANGELOG.md</code> 的 <code>## [Unreleased]</code> 替换为 <code>## [x.y.z] - YYYY-MM-DD</code></li>
+<li><strong>重新生成产物</strong> — 运行 <code>generate-models</code>（ai 包）、<code>shrinkwrap:coding-agent</code>、<code>install-lock:coding-agent</code></li>
+<li><strong>运行检查</strong> — 执行 <code>npm run check</code> 确保所有产物一致</li>
+<li><strong>提交和打标签</strong> — <code>git commit -m "Release vX.Y.Z"</code> 和 <code>git tag vX.Y.Z</code></li>
+<li><strong>添加下周期 Unreleased</strong> — 在各 CHANGELOG 头部插入新的 <code>## [Unreleased]</code> 节</li>
+<li><strong>提交 CHANGELOG 更新</strong> — <code>git commit -m "Add [Unreleased] section for next cycle"</code></li>
+<li><strong>推送</strong> — <code>git push origin main</code> 和 <code>git push origin vX.Y.Z</code></li>
+</ol>
+<h3>CI 自动发布</h3>
+<p>推送 <code>vX.Y.Z</code> 标签后，<code>build-binaries.yml</code> 自动触发：</p>
+<ul>
+<li>构建多平台 Bun 二进制文件</li>
+<li><strong>publish-npm</strong> job 通过 GitHub Actions OIDC 的 npm trusted publishing（无需本地 <code>npm publish</code>、OTP 或 WebAuthn）</li>
+<li><code>scripts/publish.mjs</code> 是幂等的——跳过已在 npm 上存在的包版本</li>
+<li>发布成功后，draft GitHub Release 转为正式 release</li>
+</ul>
+<h3>发布前本地冒烟测试</h3>
+<p><code>scripts/local-release.mjs</code> 在 repo 外部创建隔离的测试环境：</p>
+<pre><code class="language-bash">npm run release:local -- --out /tmp/pi-local-release --force
+</code></pre>
+<p>流程：
+1. 运行 <code>npm run check</code>
+2. 清理并构建所有包
+3. 为每个包创建 npm tarball
+4. 构建当前平台的 Bun 二进制
+5. 创建隔离的 npm 安装（使用 <code>file:</code> 协议引用 tarball）
+6. 创建隔离的 Bun 安装</p>
+<p>测试要点：从 <code>/tmp</code> 目录运行隔离安装的 <code>pi</code> 命令，验证启动、模型列表、交互模式和真实推理均正常。</p>
+</section>
+
+<section id="sec-5f5e3cdd">
+<h2 id="sec-5f5e3cdd">供应链安全</h2>
+<h3>依赖版本锁定</h3>
+<ul>
+<li><code>.npmrc</code> 配置 <code>save-exact=true</code>，确保 <code>npm install &lt;pkg&gt;</code> 自动使用精确版本</li>
+<li><code>.npmrc</code> 配置 <code>min-release-age=2</code>，避免安装发布不足 2 天的依赖包（防御供应链攻击窗口）</li>
+<li><code>scripts/check-pinned-deps.mjs</code> 在 <code>npm run check</code> 中验证所有外部依赖使用精确版本</li>
+<li>内部 workspace 包使用 <code>^</code> 范围引用，保持开发灵活性</li>
+</ul>
+<h3>Lockfile 管理</h3>
+<ul>
+<li><code>package-lock.json</code> 是依赖真源（ground truth）</li>
+<li><code>.husky/pre-commit</code> 通过 <code>scripts/check-lockfile-commit.mjs</code> 阻止意外提交 lockfile 变更</li>
+<li>需要提交 lockfile 变更时设置 <code>PI_ALLOW_LOCKFILE_CHANGE=1</code></li>
+<li>CI 使用 <code>npm ci --ignore-scripts</code> 安装，确保依赖与 lockfile 完全一致</li>
+</ul>
+<h3>Shrinkwrap 与 Install Lock</h3>
+<ul>
+<li><code>packages/coding-agent/npm-shrinkwrap.json</code> 从根 lockfile 生成，锁定 CLI 发布包的所有传递依赖</li>
+<li><code>packages/coding-agent/install-lock/</code> 下的 lockfile 用于 <code>pi update --self</code> 自更新</li>
+<li>两个生成脚本均包含 <code>allowedInstallScriptPackages</code> 白名单，新增含 lifecycle script 的依赖会导致检查失败，需显式审核后加入白名单</li>
+</ul>
+<h3><code>--ignore-scripts</code> 策略</h3>
+<ul>
+<li>本地开发安装：<code>npm install --ignore-scripts</code></li>
+<li>CI 安装：<code>npm ci --ignore-scripts</code></li>
+<li>用户安装文档：<code>npm install --ignore-scripts @earendil-works/pi-coding-agent</code></li>
+<li><code>pi update --self</code>：内部使用 <code>--ignore-scripts</code></li>
+<li>生命周期脚本仅在白名单明确允许后生效</li>
+</ul>
+<h3>安全审计</h3>
+<p><code>npm-audit.yml</code> 每日定时运行：
+- 生产依赖漏洞审计（<code>moderate</code> 级别及以上）
+- Registry 签名验证</p>
+<h3>npm 发布安全</h3>
+<ul>
+<li>使用 GitHub Actions OIDC trusted publishing，无需长期令牌</li>
+<li>发布流程由 <code>environment: npm-publish</code> 保护，需仓库管理员审批</li>
+<li>所有包发布时附带 <code>--provenance</code> 声明，提供可验证的构建来源</li>
+</ul>
+</section>
+
+<section id="sec-ee4989c2">
+<h2 id="sec-ee4989c2">相关文档</h2>
+<ul>
+<li><a href="https://github.com/earendil-works/pi/blob/main/README.md">README.md</a> — 项目概览与开发入门</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">AGENTS.md</a> — 开发规范（人工和 agent 通用）</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> — 贡献指南</li>
+</ul>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="session-and-compaction.html">← 会话与压缩</a>
+  <a class="next" href="contributing.html">贡献指南 →</a>
+</div>
+</main>
+</body>
+</html>

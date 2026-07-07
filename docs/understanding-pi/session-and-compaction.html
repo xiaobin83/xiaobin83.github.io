@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 会话与压缩 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">会话与压缩</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a class="current" href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#jsonl-d7085321">JSONL 会话格式与树形结构</a></li>
+      <li><a href="#sec-784aa978">条目类型总览</a></li>
+      <li><a href="#sec-8cad870a">分支机制</a></li>
+      <li><a href="#compaction-0aac47ab">Compaction 架构</a></li>
+      <li><a href="#sec-384db004">分支总结</a></li>
+      <li><a href="#extensions-d93f10f9">自定义总结（Extensions 拦截）</a></li>
+      <li><a href="#sec-dcd9d5cd">累积文件追踪与摘要格式</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>会话管理与 Compaction 架构</h1>
+<p>pi 的会话系统采用 JSONL 文件存储、树形结构组织、增量追加写入的设计。Compaction 机制在上下文超出 LLM 窗口限制时自动总结历史消息，分支总结则在 <code>/tree</code> 导航时保留被放弃分支的上下文。</p>
+</section>
+
+<section id="jsonl-d7085321">
+<h2 id="jsonl-d7085321">JSONL 会话格式与树形结构</h2>
+<p>每个会话文件是一个 JSONL 文件，每行一个 JSON 对象，通过 <code>type</code> 字段区分条目类型。文件首行为 <code>SessionHeader</code>，后续条目通过 <code>id</code>/<code>parentId</code> 形成树形结构，实现原地分支而不创建新文件。</p>
+<pre><code>会话文件结构：
+┌────────────────────────────────────────────────────────────────┐
+│ 行 1: {&quot;type&quot;:&quot;session&quot;,&quot;version&quot;:3,&quot;id&quot;:&quot;uuid&quot;,&quot;cwd&quot;:&quot;...&quot;}  │  ← SessionHeader
+│ 行 2: {&quot;type&quot;:&quot;message&quot;,&quot;id&quot;:&quot;a1&quot;,&quot;parentId&quot;:null,...}        │  ← 根消息
+│ 行 3: {&quot;type&quot;:&quot;message&quot;,&quot;id&quot;:&quot;b1&quot;,&quot;parentId&quot;:&quot;a1&quot;,...}        │
+│ 行 4: {&quot;type&quot;:&quot;message&quot;,&quot;id&quot;:&quot;c1&quot;,&quot;parentId&quot;:&quot;b1&quot;,...}        │  ← 分支点
+│ 行 5: {&quot;type&quot;:&quot;message&quot;,&quot;id&quot;:&quot;d1&quot;,&quot;parentId&quot;:&quot;c1&quot;,...}        │  ← 当前 leaf
+│ 行 6: {&quot;type&quot;:&quot;branch_summary&quot;,&quot;id&quot;:&quot;e1&quot;,&quot;parentId&quot;:&quot;c1&quot;,...} │  ← 另一分支
+│ 行 7: {&quot;type&quot;:&quot;message&quot;,&quot;id&quot;:&quot;f1&quot;,&quot;parentId&quot;:&quot;e1&quot;,...}        │
+└────────────────────────────────────────────────────────────────┘
+
+树形拓扑：
+              ┌─ d1 (leaf, 当前活跃路径)
+  a1 ─ b1 ─ c1
+              └─ e1 ─ f1 (备选分支)
+</code></pre>
+<p>每个条目（除 <code>SessionHeader</code>）继承 <code>SessionEntryBase</code>：</p>
+<pre><code class="language-typescript">// packages/coding-agent/src/core/session-manager.ts
+interface SessionEntryBase {
+  type: string;
+  id: string;              // 8 位十六进制 ID
+  parentId: string | null; // 父条目 ID，根为 null
+  timestamp: string;       // ISO 时间戳
+}
+</code></pre>
+<p><code>SessionManager</code> 维护一个 <code>leafId</code> 指针指向当前位置。追加操作（<code>appendMessage</code> 等）始终在 leaf 下创建子节点，<code>branch()</code> 移动 leaf 指针到任意历史条目。所有条目不可修改、不可删除——历史完整保留。</p>
+<h3>版本迁移</h3>
+<p>会话格式经历三个版本：</p>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>变更</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v1</td>
+<td>线性条目序列，无 <code>id</code>/<code>parentId</code></td>
+</tr>
+<tr>
+<td>v2</td>
+<td>引入树形结构，<code>id</code>/<code>parentId</code> 链接</td>
+</tr>
+<tr>
+<td>v3</td>
+<td><code>hookMessage</code> role 重命名为 <code>custom</code></td>
+</tr>
+</tbody>
+</table>
+<p>加载旧会话时自动迁移至当前版本（v3），并原地回写文件（<code>migrateV1ToV2</code>、<code>migrateV2ToV3</code>）。</p>
+</section>
+
+<section id="sec-784aa978">
+<h2 id="sec-784aa978">条目类型总览</h2>
+<p><code>SessionEntry</code> 联合类型包含以下变体，定义在 <code>packages/coding-agent/src/core/session-manager.ts</code>：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>type 字段</th>
+<th>作用</th>
+<th style="text-align: center;">参与 LLM 上下文</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SessionMessageEntry</code></td>
+<td><code>"message"</code></td>
+<td>存储 <code>AgentMessage</code></td>
+<td style="text-align: center;">是</td>
+</tr>
+<tr>
+<td><code>CompactionEntry</code></td>
+<td><code>"compaction"</code></td>
+<td>上下文压缩摘要，记录 <code>firstKeptEntryId</code> 和 <code>tokensBefore</code></td>
+<td style="text-align: center;">是（转为 <code>compactionSummary</code>）</td>
+</tr>
+<tr>
+<td><code>BranchSummaryEntry</code></td>
+<td><code>"branch_summary"</code></td>
+<td>分支切换时的上下文摘要</td>
+<td style="text-align: center;">是（转为 <code>branchSummary</code>）</td>
+</tr>
+<tr>
+<td><code>ModelChangeEntry</code></td>
+<td><code>"model_change"</code></td>
+<td>记录模型切换</td>
+<td style="text-align: center;">否（影响上下文构建）</td>
+</tr>
+<tr>
+<td><code>ThinkingLevelChangeEntry</code></td>
+<td><code>"thinking_level_change"</code></td>
+<td>记录思考级别变更</td>
+<td style="text-align: center;">否（影响上下文构建）</td>
+</tr>
+<tr>
+<td><code>CustomEntry</code></td>
+<td><code>"custom"</code></td>
+<td>Extension 状态持久化</td>
+<td style="text-align: center;">否</td>
+</tr>
+<tr>
+<td><code>CustomMessageEntry</code></td>
+<td><code>"custom_message"</code></td>
+<td>Extension 注入的消息</td>
+<td style="text-align: center;">是</td>
+</tr>
+<tr>
+<td><code>LabelEntry</code></td>
+<td><code>"label"</code></td>
+<td>用户书签/标记</td>
+<td style="text-align: center;">否</td>
+</tr>
+<tr>
+<td><code>SessionInfoEntry</code></td>
+<td><code>"session_info"</code></td>
+<td>会话元数据（如显示名称）</td>
+<td style="text-align: center;">否</td>
+</tr>
+</tbody>
+</table>
+<p><code>LeafEntry</code> 不是独立的条目类型——"leaf" 是 <code>SessionManager</code> 维护的指针（<code>leafId</code>），指向当前树形路径的末端条目。<code>getLeafEntry()</code> 返回该位置的 <code>SessionEntry</code>。</p>
+<h3>上下文构建流程</h3>
+<p><code>buildContextEntries()</code> 从当前 leaf 向根遍历，产出活跃路径的条目列表。遇到 <code>CompactionEntry</code> 时，仅保留压缩条目自身 + <code>firstKeptEntryId</code> 到压缩条目之间的条目 + 压缩条目之后的条目，更早的已总结条目被省略。</p>
+<p><code>buildSessionContext()</code> 在此基础上将条目转换为 <code>AgentMessage[]</code>：
+- <code>message</code> → 原样保留的 <code>AgentMessage</code>
+- <code>compaction</code> → <code>CompactionSummaryMessage</code>
+- <code>branch_summary</code> → <code>BranchSummaryMessage</code>
+- <code>custom_message</code> → <code>CustomMessage</code>
+- <code>custom</code> → 不参与上下文</p>
+</section>
+
+<section id="sec-8cad870a">
+<h2 id="sec-8cad870a">分支机制</h2>
+<h3><code>/tree</code> 原地分支</h3>
+<p><code>SessionManager.branch(entryId)</code> 将 leaf 指针移动到指定历史条目，下一次 <code>appendMessage()</code> 将创建该条目的新子节点，形成新分支。原有条目不受影响。</p>
+<pre><code>进入 /tree 前：
+  a1 ─ b1 ─ c1 ─ d1 (leaf)
+
+选择 c1 后：
+  a1 ─ b1 ─ c1 ─ d1
+              └─ (等待输入) ← leaf 已移动到 c1
+
+输入新消息后：
+  a1 ─ b1 ─ c1 ─ d1
+              └─ e1 (leaf, 新分支)
+</code></pre>
+<p><code>branchWithSummary(branchFromId, summary)</code> 在分支的同时追加 <code>BranchSummaryEntry</code>，保留被放弃路径的上下文摘要。</p>
+<h3><code>/fork</code> 与 <code>/clone</code></h3>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>输出</th>
+<th>视图</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/tree</code></td>
+<td>同文件</td>
+<td>完整树</td>
+<td>原地探索备选方案</td>
+</tr>
+<tr>
+<td><code>/fork</code></td>
+<td>新文件</td>
+<td>用户消息选择器</td>
+<td>从历史提示重新开始</td>
+</tr>
+<tr>
+<td><code>/clone</code></td>
+<td>新文件</td>
+<td>当前活跃分支</td>
+<td>复制当前工作继续</td>
+</tr>
+</tbody>
+</table>
+<p><code>/fork</code> 通过 <code>SessionManager.forkFrom()</code> 创建新会话文件，复制源文件的全部非 header 条目并写入新的 <code>SessionHeader</code>（含 <code>parentSession</code> 指向源文件）。</p>
+<p><code>createBranchedSession(leafId)</code> 提取从根到指定 leaf 的路径到新会话文件，过滤掉 <code>LabelEntry</code> 并重新链接父子关系，同时从解析后的 label map 重建标签条目。</p>
+<h3>SessionManager 分支相关方法</h3>
+<pre><code class="language-typescript">// packages/coding-agent/src/core/session-manager.ts
+
+// 移动 leaf 指针到历史条目
+branch(branchFromId: string): void
+
+// 移动 leaf 并追加 BranchSummaryEntry
+branchWithSummary(branchFromId: string | null, summary: string, details?, fromHook?): string
+
+// 重置 leaf 为 null（用于重新编辑首条消息）
+resetLeaf(): void
+
+// 提取路径到新会话文件
+createBranchedSession(leafId: string): string | undefined
+
+// 静态方法：从其他项目 fork 会话
+static forkFrom(sourcePath: string, targetCwd: string, sessionDir?): SessionManager
+</code></pre>
+</section>
+
+<section id="compaction-0aac47ab">
+<h2 id="compaction-0aac47ab">Compaction 架构</h2>
+<p>当上下文 token 数接近模型窗口限制时，Compaction 将较早的消息总结为结构化摘要，释放上下文空间。详细机制见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md">packages/coding-agent/docs/compaction.md</a>，此处聚焦设计原则与数据结构。</p>
+<h3>触发条件</h3>
+<pre><code>contextTokens &gt; contextWindow - reserveTokens
+</code></pre>
+<ul>
+<li><code>reserveTokens</code> 默认为 16384（为 LLM 响应预留空间）</li>
+<li><code>keepRecentTokens</code> 默认为 20000（保留最近这么多 token 的消息不被总结）</li>
+<li>可通过 <code>/settings</code> 或 <code>settings.json</code> 中的 <code>compaction</code> 配置段调整</li>
+</ul>
+<p>触发时机有两种：
+- <strong>threshold</strong>：上下文接近窗口限制，主动压缩
+- <strong>overflow</strong>：上下文超出窗口导致请求失败，恢复后重试（<code>willRetry = true</code>）</p>
+<p>也可手动触发：<code>/compact [自定义指令]</code>。</p>
+<h3>剪切点规则</h3>
+<p><code>findCutPoint()</code> 从最新消息向旧消息方向遍历，累加 token 估算值，直到达到 <code>keepRecentTokens</code>。有效剪切点包括：</p>
+<ul>
+<li>用户消息（user）</li>
+<li>助手消息（assistant）</li>
+<li>Bash 执行消息（bashExecution）</li>
+<li>自定义消息（custom_message、branch_summary）</li>
+</ul>
+<p>绝不剪切工具结果（toolResult）——它们必须跟随对应的工具调用。</p>
+<h3>分割轮次（Split Turn）</h3>
+<p>当单个轮次的 token 量超过 <code>keepRecentTokens</code> 时，剪切点落在轮次中间，形成"分割轮次"：</p>
+<pre><code>分割轮次示意（一个巨型轮次超出预算）：
+
+  条目:  0     1     2      3     4      5      6     7      8
+       ┌─────┬─────┬─────┬──────┬─────┬──────┬──────┬─────┬──────┐
+       │ hdr │ usr │ ass │ tool │ ass │ tool │ tool │ ass │ tool │
+       └─────┴─────┴─────┴──────┴─────┴──────┴──────┴─────┴──────┘
+               ↑                                     ↑
+        turnStartIndex = 1                  firstKeptEntryId = 7
+               │                                     │
+               └──── turnPrefixMessages (1-6) ───────┘
+                                                     └── kept (7-8)
+
+  isSplitTurn = true
+  messagesToSummarize = []  （之前没有完整轮次）
+  turnPrefixMessages = [usr, ass, tool, ass, tool, tool]
+</code></pre>
+<p>分割轮次时生成两份摘要并合并：
+1. <strong>历史摘要</strong>：之前完整轮次的总结
+2. <strong>轮次前缀摘要</strong>：分割轮次前半部分的总结</p>
+<h3>Compaction 前后状态图</h3>
+<pre><code>Compaction 前：
+
+  条目:  0     1     2     3      4     5     6      7      8     9
+       ┌─────┬─────┬─────┬─────┬──────┬─────┬─────┬──────┬──────┬─────┐
+       │ hdr │ usr │ ass │ tool │ usr │ ass │ tool │ tool │ ass │ tool│
+       └─────┴─────┴─────┴──────┴─────┴─────┴──────┴──────┴─────┴─────┘
+               └────────┬───────┘ └──────────────┬──────────────┘
+              messagesToSummarize            kept messages
+                                  ↑
+                         firstKeptEntryId (条目 4)
+
+Compaction 后（新条目追加）：
+
+  条目:  0     1     2     3      4     5     6      7      8     9     10
+       ┌─────┬─────┬─────┬─────┬──────┬─────┬─────┬──────┬──────┬─────┬─────┐
+       │ hdr │ usr │ ass │ tool │ usr │ ass │ tool │ tool │ ass │ tool│ cmp │
+       └─────┴─────┴─────┴──────┴─────┴─────┴──────┴──────┴─────┴─────┴─────┘
+              └──────────┬──────┘ └──────────────────────┬───────────────────┘
+                不发送给 LLM                       发送给 LLM
+                                                        ↑
+                                            从 firstKeptEntryId 开始
+
+LLM 看到的上下文：
+
+  ┌────────┬─────────┬─────┬─────┬──────┬──────┬─────┬──────┐
+  │ system │ summary │ usr │ ass │ tool │ tool │ ass │ tool │
+  └────────┴─────────┴─────┴─────┴──────┴──────┴─────┴──────┘
+       ↑         ↑      └─────────────────┬────────────────┘
+     prompt   来自 cmp        firstKeptEntryId 起的消息
+</code></pre>
+<h3>迭代式总结</h3>
+<p>每次 compaction 的总结范围从前一次 compaction 的 <code>firstKeptEntryId</code> 开始（而非从 compaction 条目本身开始），确保之前 compaction 中保留的消息在下一轮也被纳入总结。<code>generateSummary()</code> 在存在 <code>previousSummary</code> 时使用更新提示词（<code>UPDATE_SUMMARIZATION_PROMPT</code>），将新消息合并到已有摘要中，而非从头开始。</p>
+<h3>CompactionEntry 数据结构</h3>
+<pre><code class="language-typescript">// packages/coding-agent/src/core/session-manager.ts
+interface CompactionEntry&lt;T = unknown&gt; {
+  type: &quot;compaction&quot;;
+  id: string;
+  parentId: string;
+  timestamp: number;
+  summary: string;          // LLM 生成的结构化摘要
+  firstKeptEntryId: string; // 第一个被保留的条目 ID
+  tokensBefore: number;     // compaction 前的上下文 token 数
+  fromHook?: boolean;       // true 表示由 extension 生成
+  details?: T;              // 实现特定数据，默认为 CompactionDetails
+}
+
+// packages/coding-agent/src/core/compaction/compaction.ts
+interface CompactionDetails {
+  readFiles: string[];
+  modifiedFiles: string[];
+}
+</code></pre>
+<h3>核心流程</h3>
+<p><code>prepareCompaction()</code> 是纯函数，接收路径条目和设置，返回 <code>CompactionPreparation</code>。<code>compact()</code> 接收 <code>CompactionPreparation</code>，调用 LLM 生成摘要，返回 <code>CompactionResult</code>。<code>SessionManager.appendCompaction()</code> 将结果持久化为 <code>CompactionEntry</code>。</p>
+</section>
+
+<section id="sec-384db004">
+<h2 id="sec-384db004">分支总结</h2>
+<p>当用户通过 <code>/tree</code> 从一个分支导航到另一个分支时，pi 可以总结被放弃分支的内容并附加到新位置。</p>
+<h3>共同祖先查找</h3>
+<p><code>collectEntriesForBranchSummary()</code> 执行以下步骤：</p>
+<pre><code>导航前树形结构：
+
+         ┌─ B ─ C ─ D (old leaf, 将被放弃)
+    A ───┤
+         └─ E ─ F (target)
+
+共同祖先: A
+待总结条目: B, C, D
+
+导航并附加摘要后：
+
+         ┌─ B ─ C ─ D ─ [B,C,D 的摘要]
+    A ───┤
+         └─ E ─ F (new leaf)
+</code></pre>
+<ol>
+<li>从 oldLeafId 向根方向构建路径集合</li>
+<li>从 targetId 向根方向遍历，找到第一个也在旧路径中的节点（最深共同祖先）</li>
+<li>从 oldLeafId 向祖先方向收集条目，直到共同祖先</li>
+<li>反转得到时间顺序</li>
+</ol>
+<h3>条目准备与摘要生成</h3>
+<p><code>prepareBranchEntries()</code> 从最新向最旧方向遍历，在 token 预算内添加消息。同时从所有条目中累积文件操作（包括嵌套 <code>BranchSummaryEntry</code> 的 <code>details</code> 中的文件列表）。</p>
+<p><code>generateBranchSummary()</code> 调用 LLM 生成结构化摘要，使用与 compaction 相同的摘要格式。摘要前附加 <code>BRANCH_SUMMARY_PREAMBLE</code>，末尾附加文件列表。</p>
+<h3>BranchSummaryEntry 数据结构</h3>
+<pre><code class="language-typescript">// packages/coding-agent/src/core/session-manager.ts
+interface BranchSummaryEntry&lt;T = unknown&gt; {
+  type: &quot;branch_summary&quot;;
+  id: string;
+  parentId: string;
+  timestamp: number;
+  summary: string;    // LLM 生成的结构化摘要
+  fromId: string;     // 导航来源条目 ID
+  fromHook?: boolean; // true 表示由 extension 生成
+  details?: T;        // 默认为 BranchSummaryDetails
+}
+
+// packages/coding-agent/src/core/compaction/branch-summarization.ts
+interface BranchSummaryDetails {
+  readFiles: string[];
+  modifiedFiles: string[];
+}
+</code></pre>
+</section>
+
+<section id="extensions-d93f10f9">
+<h2 id="extensions-d93f10f9">自定义总结（Extensions 拦截）</h2>
+<p>Extensions 可以通过两个事件拦截并自定义 compaction 和分支总结行为。事件类型定义在 <code>packages/coding-agent/src/core/extensions/types.ts</code>。</p>
+<h3>session_before_compact</h3>
+<p>在 auto-compaction 或 <code>/compact</code> 之前触发。可以取消 compaction 或提供自定义摘要：</p>
+<pre><code class="language-typescript">pi.on(&quot;session_before_compact&quot;, async (event, ctx) =&gt; {
+  const { preparation, reason, willRetry, signal } = event;
+
+  // preparation.messagesToSummarize  — 待总结的消息
+  // preparation.turnPrefixMessages   — 分割轮次前缀（如果 isSplitTurn）
+  // preparation.previousSummary      — 前一次 compaction 摘要
+  // preparation.fileOps              — 提取的文件操作
+  // preparation.firstKeptEntryId     — 保留消息的起始 ID
+  // reason                           — &quot;manual&quot; | &quot;threshold&quot; | &quot;overflow&quot;
+
+  // 取消 compaction:
+  return { cancel: true };
+
+  // 提供自定义摘要:
+  return {
+    compaction: {
+      summary: &quot;自定义摘要...&quot;,
+      firstKeptEntryId: preparation.firstKeptEntryId,
+      tokensBefore: preparation.tokensBefore,
+      details: { /* 自定义数据 */ },
+    }
+  };
+});
+</code></pre>
+<p><code>CompactionEntry.details</code> 接受任意 JSON 可序列化数据，extensions 可用于存储自定义状态。</p>
+<h3>session_before_tree</h3>
+<p>在 <code>/tree</code> 导航前触发。无论用户是否选择总结都会触发。可以取消导航或提供自定义摘要：</p>
+<pre><code class="language-typescript">pi.on(&quot;session_before_tree&quot;, async (event, ctx) =&gt; {
+  const { preparation, signal } = event;
+
+  // preparation.targetId            — 导航目标 ID
+  // preparation.oldLeafId           — 当前位置（将被放弃）
+  // preparation.commonAncestorId    — 共同祖先
+  // preparation.entriesToSummarize  — 待总结的条目
+  // preparation.userWantsSummary    — 用户是否选择总结
+
+  // 取消导航:
+  return { cancel: true };
+
+  // 提供自定义摘要（仅在 userWantsSummary 为 true 时生效）:
+  if (preparation.userWantsSummary) {
+    return {
+      summary: {
+        summary: &quot;自定义分支摘要...&quot;,
+        details: { /* 自定义数据 */ },
+      }
+    };
+  }
+});
+</code></pre>
+<p><code>BranchSummaryEntry.details</code> 同样接受任意 JSON 可序列化数据。</p>
+</section>
+
+<section id="sec-dcd9d5cd">
+<h2 id="sec-dcd9d5cd">累积文件追踪与摘要格式</h2>
+<h3>累积文件追踪</h3>
+<p>compaction 和 branch summarization 都采用累积式文件追踪。生成摘要时，文件操作从以下来源提取：</p>
+<ol>
+<li>当前被总结消息中的工具调用（<code>read</code>、<code>write</code>、<code>edit</code>、<code>bash</code>）</li>
+<li>前一次 compaction 或 branch summary 的 <code>details</code> 中的文件列表（仅 pi 生成的，<code>fromHook !== true</code>）</li>
+</ol>
+<p>这意味着文件追踪在多次 compaction 或嵌套 branch summary 之间累积，完整保留读取和修改文件的历史。</p>
+<p><code>createFileOps()</code> 创建空的操作集合，<code>extractFileOpsFromMessage()</code> 从单条消息提取操作，<code>computeFileLists()</code> 在摘要生成后将集合转换为去重排序的数组。</p>
+<h3>摘要格式</h3>
+<p>compaction 和 branch summarization 使用相同的结构化格式：</p>
+<pre><code class="language-markdown">## Goal
+[用户试图完成什么]
+
+## Constraints &amp; Preferences
+- [用户提到的约束和偏好]
+
+## Progress
+### Done
+- [x] [已完成的任务]
+
+### In Progress
+- [ ] [当前进行中的工作]
+
+### Blocked
+- [阻碍进展的问题]
+
+## Key Decisions
+- **[决策]**：[简要理由]
+
+## Next Steps
+1. [接下来应该做什么]
+
+## Critical Context
+- [继续工作所需的关键数据]
+
+&lt;read-files&gt;
+path/to/file1.ts
+path/to/file2.ts
+&lt;/read-files&gt;
+
+&lt;modified-files&gt;
+path/to/changed.ts
+&lt;/modified-files&gt;
+</code></pre>
+<p>文件列表（<code>&lt;read-files&gt;</code> 和 <code>&lt;modified-files&gt;</code>）由 <code>formatFileOperations()</code> 在摘要末尾自动追加。工具结果在序列化时截断至 2000 字符以控制 token 预算。</p>
+<h3>设置</h3>
+<p>在 <code>~/.pi/agent/settings.json</code> 或 <code>&lt;project-dir&gt;/.pi/settings.json</code> 中配置：</p>
+<pre><code class="language-json">{
+  &quot;compaction&quot;: {
+    &quot;enabled&quot;: true,
+    &quot;reserveTokens&quot;: 16384,
+    &quot;keepRecentTokens&quot;: 20000
+  }
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>设置项</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td>启用自动 compaction</td>
+</tr>
+<tr>
+<td><code>reserveTokens</code></td>
+<td><code>16384</code></td>
+<td>为 LLM 响应预留的 token 数</td>
+</tr>
+<tr>
+<td><code>keepRecentTokens</code></td>
+<td><code>20000</code></td>
+<td>保留不被总结的最近 token 数</td>
+</tr>
+</tbody>
+</table>
+<p>禁用自动 compaction：<code>"enabled": false</code>。仍可通过 <code>/compact</code> 手动触发。</p>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="extension-system.html">← 扩展系统</a>
+  <a class="next" href="build-and-release.html">构建与发布 →</a>
+</div>
+</main>
+</body>
+</html>

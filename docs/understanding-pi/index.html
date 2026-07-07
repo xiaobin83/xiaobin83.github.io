@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 文档首页 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">首页</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a class="current" href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-dcb8ee94">项目简介</a></li>
+      <li><a href="#sec-6c981728">文档目录</a></li>
+      <li><a href="#sec-2c414bcf">阅读路径建议</a></li>
+      <li><a href="#sec-5c929dc4">中文术语表</a></li>
+      <li><a href="#sec-ff6eb991">文件命名约定</a></li>
+      <li><a href="#sec-21fcb351">交叉链接速查</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>Pi 文档索引</h1>
+</section>
+
+<section id="sec-dcb8ee94">
+<h2 id="sec-dcb8ee94">项目简介</h2>
+<p>Pi 是一个极简终端编程助手（terminal coding harness），核心保持最小化，通过 TypeScript 扩展（extension）、技能（skill）、提示模板（prompt template）和主题（theme）机制实现高度可定制。Pi 的设计哲学是"适应你的工作流，而不是反过来"——它不内置子代理、计划模式、权限弹窗等功能，而是提供强大的扩展 API，让你按需构建或从社区安装。</p>
+<p>Pi 运行于四种模式：交互式终端、单次输出（<code>-p</code>）、JSON 事件流（<code>--mode json</code>）和 RPC 模式（<code>--mode rpc</code>），并可通过 SDK 嵌入 Node.js 应用。Pi 是一个 monorepo，包含五个 npm 包，从底层多提供商 LLM API 到上层编码代理 CLI，逐层构建。</p>
+</section>
+
+<section id="sec-6c981728">
+<h2 id="sec-6c981728">文档目录</h2>
+<h3>架构概览</h3>
+<ul>
+<li><a href="https://github.com/earendil-works/pi/blob/main/README.md">项目 README</a> — 项目总览、包列表、开发与发布流程</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">贡献指南</a> — 贡献门槛、Issue/PR 质量要求、评审流程</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">开发规则</a> — 代码规范、Git 纪律、发布流程（面向人类和 AI）</li>
+</ul>
+<h3>包设计</h3>
+<ul>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/ai/README.md">pi-ai 包 README</a> — 统一多提供商 LLM API：模型目录、认证解析、工具定义、流式事件、思考/推理、跨提供商切换</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/agent/README.md">pi-agent-core 包 README</a> — 有状态代理运行时：消息流转、工具执行（并行/串行）、中途引导（steering）、事件流</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md">pi-coding-agent 包 README</a> — 交互式编码代理 CLI：快速开始、提供商配置、会话管理、自定义扩展/技能/主题、CLI 参考</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/tui/README.md">pi-tui 包 README</a> — 终端 UI 框架：差分渲染、组件模型、内置组件（Editor/Markdown/SelectList 等）、IME 支持</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/orchestrator/README.md">pi-orchestrator 包 README</a> — 实验性编排器（开发中）</li>
+</ul>
+<h3>系统机制</h3>
+<blockquote>
+<p>以下文档位于 <code>packages/coding-agent/docs/</code>，面向 Pi 用户。后续 <code>docs/packages/</code> 将补充面向开发者的包级设计文档。</p>
+</blockquote>
+<ul>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md">用户文档索引</a> — 所有用户文档的总入口</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/session-format.md">会话格式</a> — JSONL 会话文件格式、条目类型、SessionManager API</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md">上下文压缩</a> — 会话压缩与分支摘要机制</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">扩展系统</a> — TypeScript 扩展开发：工具、命令、事件、自定义 UI</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md">技能系统</a> — Agent Skills 标准的实现与使用</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/settings.md">设置系统</a> — 全局与项目级配置项参考</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/providers.md">提供商配置</a> — 内置提供商的订阅与 API Key 配置</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md">模型配置</a> — 自定义模型条目与兼容性设置</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md">SDK 使用</a> — 在 Node.js 应用中嵌入 Pi</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md">RPC 模式</a> — stdin/stdout JSONL 进程集成协议</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/security.md">安全模型</a> — 项目信任、沙箱边界、漏洞报告</li>
+</ul>
+</section>
+
+<section id="sec-2c414bcf">
+<h2 id="sec-2c414bcf">阅读路径建议</h2>
+<h3>新用户</h3>
+<ol>
+<li><a href="https://github.com/earendil-works/pi/blob/main/README.md">项目 README</a> — 了解 Pi 是什么</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md">coding-agent 包 README</a> — 安装、认证、第一个会话</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md">用户文档索引</a> → 按需跳转具体主题</li>
+</ol>
+<h3>扩展/技能开发者</h3>
+<ol>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md">coding-agent 包 README</a> — 理解扩展、技能、主题、Pi 包的概念</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">扩展系统文档</a> — ExtensionAPI 参考</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md">技能系统文档</a> — 技能规范与最佳实践</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/tui/README.md">TUI 包 README</a> — 如需自定义终端 UI 组件</li>
+</ol>
+<h3>包/SDK 开发者</h3>
+<ol>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/ai/README.md">ai 包 README</a> — LLM API 层：Models 集合、Provider、认证、流式事件、工具定义</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/agent/README.md">agent-core 包 README</a> — 代理运行时：Agent 类、事件流、工具执行、中途引导</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md">SDK 文档</a> — 嵌入 Pi 到应用</li>
+</ol>
+<h3>贡献者</h3>
+<ol>
+<li><a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">贡献指南</a> — 贡献门槛与流程</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">开发规则</a> — 代码规范与项目约定</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/SECURITY.md">安全策略</a> — 安全漏洞报告流程</li>
+</ol>
+</section>
+
+<section id="sec-5c929dc4">
+<h2 id="sec-5c929dc4">中文术语表</h2>
+<p>Pi 文档以英文编写为主，以下术语在中文技术讨论中的推荐翻译：</p>
+<table>
+<thead>
+<tr>
+<th>英文</th>
+<th>中文推荐</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>agent</td>
+<td>代理</td>
+<td>执行工具调用和对话循环的有状态运行时</td>
+</tr>
+<tr>
+<td>coding agent</td>
+<td>编码代理</td>
+<td>面向软件开发场景的代理，Pi 的核心场景</td>
+</tr>
+<tr>
+<td>compaction</td>
+<td>上下文压缩</td>
+<td>对历史消息进行摘要以节省上下文窗口</td>
+</tr>
+<tr>
+<td>extension</td>
+<td>扩展</td>
+<td>TypeScript 模块，可注册自定义工具、命令、事件处理器和 UI 组件</td>
+</tr>
+<tr>
+<td>harness</td>
+<td>运行时框架</td>
+<td>Pi 作为"代理运行时"的整体定位</td>
+</tr>
+<tr>
+<td>hook</td>
+<td>钩子</td>
+<td>扩展生命周期中可注入逻辑的挂载点</td>
+</tr>
+<tr>
+<td>model</td>
+<td>模型</td>
+<td>LLM 模型，包含提供商、API 类型、上下文窗口等元数据</td>
+</tr>
+<tr>
+<td>provider</td>
+<td>提供商</td>
+<td>LLM 服务提供方（Anthropic、OpenAI、Google 等），负责认证和模型目录</td>
+</tr>
+<tr>
+<td>session</td>
+<td>会话</td>
+<td>一次对话的完整记录，以 JSONL 文件存储，支持分支树结构</td>
+</tr>
+<tr>
+<td>skill</td>
+<td>技能</td>
+<td>遵循 Agent Skills 标准的按需能力包，通过 <code>/skill:name</code> 或自动加载</td>
+</tr>
+<tr>
+<td>steering</td>
+<td>中途引导</td>
+<td>代理执行工具期间用户插入的纠正/引导消息</td>
+</tr>
+<tr>
+<td>stream</td>
+<td>流</td>
+<td>模型响应的增量式传输，通过事件（text_delta、toolcall_delta 等）逐步推送</td>
+</tr>
+<tr>
+<td>tool</td>
+<td>工具</td>
+<td>代理可调用的外部能力（读文件、执行命令等）</td>
+</tr>
+<tr>
+<td>turn</td>
+<td>轮次</td>
+<td>一次 LLM 调用及其后续工具执行构成的完整交互周期</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section id="sec-ff6eb991">
+<h2 id="sec-ff6eb991">文件命名约定</h2>
+<p><code>docs/packages/</code> 目录下的文件按 npm 包名命名：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>npm 包</th>
+<th>源码目录</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pi-ai.md</code></td>
+<td><code>@earendil-works/pi-ai</code></td>
+<td><code>packages/ai/</code></td>
+</tr>
+<tr>
+<td><code>pi-agent.md</code></td>
+<td><code>@earendil-works/pi-agent-core</code></td>
+<td><code>packages/agent/</code></td>
+</tr>
+<tr>
+<td><code>pi-coding-agent.md</code></td>
+<td><code>@earendil-works/pi-coding-agent</code></td>
+<td><code>packages/coding-agent/</code></td>
+</tr>
+<tr>
+<td><code>pi-tui.md</code></td>
+<td><code>@earendil-works/pi-tui</code></td>
+<td><code>packages/tui/</code></td>
+</tr>
+<tr>
+<td><code>pi-orchestrator.md</code></td>
+<td><code>@earendil-works/pi-orchestrator</code></td>
+<td><code>packages/orchestrator/</code></td>
+</tr>
+</tbody>
+</table>
+<p>这些文件面向开发者，涵盖各包的架构设计、核心类型、关键流程和实现细节，与包 README（面向使用）和 <code>packages/coding-agent/docs/</code>（面向用户）互补。</p>
+</section>
+
+<section id="sec-21fcb351">
+<h2 id="sec-21fcb351">交叉链接速查</h2>
+<ul>
+<li>项目根 README：<a href="https://github.com/earendil-works/pi/blob/main/README.md">../README.md</a></li>
+<li>贡献指南：<a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">../CONTRIBUTING.md</a></li>
+<li>开发规则：<a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">../AGENTS.md</a></li>
+<li>安全策略：<a href="https://github.com/earendil-works/pi/blob/main/SECURITY.md">../SECURITY.md</a></li>
+<li>用户文档索引：<a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md">../packages/coding-agent/docs/index.md</a></li>
+<li>Pi 官网：<a href="https://pi.dev">https://pi.dev</a></li>
+<li>Pi RFC：<a href="https://rfc.earendil.com/keyword/pi/">https://rfc.earendil.com/keyword/pi/</a></li>
+</ul>
+</section>
+
+<div class="next-section">
+  
+  <a class="next" href="architecture.html">整体架构 →</a>
+</div>
+</main>
+</body>
+</html>

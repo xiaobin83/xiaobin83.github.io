@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-orchestrator 包设计 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">pi-orchestrator</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a class="current" href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-efff29dc">架构概述</a></li>
+      <li><a href="#sec-c9eff7d0">文件分解</a></li>
+      <li><a href="#ipc-38eb3bc2">IPC 机制</a></li>
+      <li><a href="#supervisor-f0039c91">Supervisor 模式</a></li>
+      <li><a href="#coding-agent-c96168cb">与 coding-agent 的关系</a></li>
+      <li><a href="#radius-eef3ff8f">Radius 云集成</a></li>
+      <li><a href="#sec-efbcc1fb">数据持久化</a></li>
+      <li><a href="#sec-176808a1">生命周期</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>pi-orchestrator</h1>
+<blockquote>
+<p>⚠️ <strong>实验性包</strong> — 本包处于活跃开发阶段，CLI、API 及行为均不稳定，可能随时变更或移除。详见 <code>packages/orchestrator/README.md</code>。</p>
+</blockquote>
+<p><code>@earendil-works/pi-orchestrator</code>（源码：<code>packages/orchestrator/</code>）是 Pi 的进程编排层，负责管理 coding-agent 实例的生命周期、RPC 通信代理以及 Radius 云平台集成。</p>
+<hr />
+</section>
+
+<section id="sec-efff29dc">
+<h2 id="sec-efff29dc">架构概述</h2>
+<p>orchestrator 采用<strong>守护进程 + CLI 客户端</strong>模式，通过 Unix 域套接字（<code>orchestrator.sock</code>）通信：</p>
+<ul>
+<li><strong>守护进程</strong>：<code>orchestrator serve</code> 启动，监听本地 socket，管理所有 coding-agent 子进程</li>
+<li><strong>CLI 客户端</strong>：<code>orchestrator spawn/list/status/stop/rpc/rpc-stream</code> 通过 socket 向守护进程发送请求</li>
+<li><strong>进程管理器（supervisor）</strong>：<code>OrchestratorSupervisor</code>（<code>packages/orchestrator/src/supervisor.ts</code>）负责 spawn、stop、RPC 代理</li>
+<li><strong>RPC 代理</strong>：每个 coding-agent 实例以 <code>--mode rpc</code> 子进程方式运行，supervisor 通过 stdin/stdout JSONL 协议与子进程通信</li>
+</ul>
+<pre><code>┌──────────────┐  socket   ┌─────────────────────────────────────┐
+│  CLI client  │ ────────→ │          orchestrator serve          │
+│  (cli.ts)    │           │  ┌─────────────────────────────────┐│
+└──────────────┘           │  │     OrchestratorSupervisor      ││
+                           │  │  ┌──────────┐  ┌──────────────┐││
+                           │  │  │ instance1│  │  instance2   │││
+                           │  │  │ (--mode  │  │  (--mode rpc)│││
+                           │  │  │  rpc)    │  │              │││
+                           │  │  └──────────┘  └──────────────┘││
+                           │  └─────────────────────────────────┘│
+                           │              │                      │
+                           │              ▼                      │
+                           │      Radius API (pi.dev)            │
+                           └─────────────────────────────────────┘
+</code></pre>
+<hr />
+</section>
+
+<section id="sec-c9eff7d0">
+<h2 id="sec-c9eff7d0">文件分解</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/cli.ts</code></td>
+<td>CLI 入口，解析命令（<code>serve</code>/<code>spawn</code>/<code>list</code>/<code>status</code>/<code>stop</code>/<code>rpc</code>/<code>rpc-stream</code>），通过 IPC client 与守护进程通信</td>
+</tr>
+<tr>
+<td><code>src/config.ts</code></td>
+<td>配置管理：socket 路径、数据目录（<code>~/.pi/orchestrator/</code>）、Bun binary 检测、版本号</td>
+</tr>
+<tr>
+<td><code>src/types.ts</code></td>
+<td>核心类型定义：<code>InstanceStatus</code>（<code>starting</code>/<code>online</code>/<code>stopping</code>/<code>stopped</code>/<code>error</code>）、<code>InstanceRecord</code>、<code>MachineRecord</code>、<code>RadiusRegistration</code></td>
+</tr>
+<tr>
+<td><code>src/serve.ts</code></td>
+<td>守护进程入口：创建 socket、启动 IPC server、恢复上次状态、初始化 Radius、注册信号处理（SIGINT/SIGTERM）</td>
+</tr>
+<tr>
+<td><code>src/supervisor.ts</code></td>
+<td>核心编排器：管理 live instances 的 <code>Map</code>，提供 <code>spawnInstance</code>、<code>stopInstance</code>、<code>handleRpc</code>、<code>openRpcStream</code>、<code>recoverAfterRestart</code></td>
+</tr>
+<tr>
+<td><code>src/rpc-process.ts</code></td>
+<td>coding-agent 子进程封装：<code>spawn</code> 子进程（<code>--mode rpc</code>）、stdin/stdout JSONL 通信、request/response 匹配、事件广播</td>
+</tr>
+<tr>
+<td><code>src/handler.ts</code></td>
+<td>IPC 请求路由：将 socket 请求映射到 supervisor 方法，提供 <code>handleIpcRequest</code> 和 <code>openRpcStream</code></td>
+</tr>
+<tr>
+<td><code>src/storage.ts</code></td>
+<td>持久化层：<code>machine.json</code>（机器注册信息）、<code>instances.json</code>（实例列表），提供 <code>loadInstances</code>/<code>saveInstances</code>/<code>upsertInstance</code>/<code>removeInstance</code></td>
+</tr>
+<tr>
+<td><code>src/radius.ts</code></td>
+<td>Radius 云平台集成：机器注册、Pi 注册、心跳（指数退避 + 随机抖动）、404 恢复重注册</td>
+</tr>
+</tbody>
+</table>
+<h3>IPC 子模块</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/ipc/protocol.ts</code></td>
+<td>JSONL 协议定义：<code>OrchestratorRequest</code>/<code>OrchestratorResponse</code> 联合类型、<code>encodeMessage</code>/<code>parseRequestLine</code>/<code>parseResponseLine</code></td>
+</tr>
+<tr>
+<td><code>src/ipc/server.ts</code></td>
+<td>Unix 域套接字服务器：<code>startIpcServer</code>，处理常规请求（单次 request-response）和 <code>rpc_stream</code> 长连接</td>
+</tr>
+<tr>
+<td><code>src/ipc/client.ts</code></td>
+<td>IPC 客户端：<code>sendIpcRequest</code>，连接 socket、发送请求、读取响应</td>
+</tr>
+</tbody>
+</table>
+<hr />
+</section>
+
+<section id="ipc-38eb3bc2">
+<h2 id="ipc-38eb3bc2">IPC 机制</h2>
+<p>orchestrator 的 IPC 分为两层：</p>
+<h3>1. CLI ↔ 守护进程（Unix 域套接字 + JSONL）</h3>
+<p>CLI 客户端（<code>src/ipc/client.ts</code>）通过 <code>sendIpcRequest</code> 连接到 <code>orchestrator.sock</code>，发送单行 JSON 请求，读取单行 JSON 响应后断开。协议定义在 <code>src/ipc/protocol.ts</code>：</p>
+<ul>
+<li>请求类型：<code>spawn</code>、<code>list</code>、<code>status</code>、<code>stop</code>、<code>rpc</code>、<code>rpc_stream</code></li>
+<li>每条消息以 <code>\n</code> 分隔（<code>encodeMessage</code> 执行 <code>JSON.stringify(message) + "\n"</code>）</li>
+</ul>
+<p><code>rpc_stream</code> 是特殊的长连接模式：服务器验证实例存在后，保持连接并将后续 JSONL 消息（<code>RpcCommand</code>、<code>RpcExtensionUIResponse</code>）转发到对应的 coding-agent 子进程，同时将子进程的响应和事件（<code>RpcResponse</code>、<code>AgentSessionEvent</code>、<code>RpcExtensionUIRequest</code>）回写到 socket。</p>
+<h3>2. 守护进程 ↔ coding-agent 子进程（stdin/stdout JSONL）</h3>
+<p><code>RpcProcessInstance</code>（<code>src/rpc-process.ts</code>）通过 <code>spawn</code> 启动 coding-agent 子进程，使用子进程的 stdin/stdout 进行 JSONL 通信：</p>
+<ul>
+<li><strong>发送 RPC 命令</strong>：<code>send(command)</code> 将 <code>RpcCommand</code> JSON 写入子进程 stdin，通过 <code>id</code> 字段匹配响应</li>
+<li><strong>接收响应</strong>：stdout 逐行解析，<code>type: "response"</code> 的消息匹配到对应 <code>pendingRequests</code> 的 Promise</li>
+<li><strong>事件广播</strong>：非 <code>response</code> 类型的消息（如 <code>AgentSessionEvent</code>）广播给所有 <code>eventListeners</code></li>
+<li><strong>UI 请求转发</strong>：<code>type: "extension_ui_request"</code> 的消息通过 <code>uiRequestHandler</code> 回调处理</li>
+</ul>
+<hr />
+</section>
+
+<section id="supervisor-f0039c91">
+<h2 id="supervisor-f0039c91">Supervisor 模式</h2>
+<p><code>OrchestratorSupervisor</code>（<code>src/supervisor.ts</code>）是编排层的核心，以单例形式导出（<code>export const supervisor = new OrchestratorSupervisor()</code>）。核心方法：</p>
+<h3>spawnInstance</h3>
+<pre><code>spawnInstance({ cwd, label? }) → InstanceRecord
+</code></pre>
+<ol>
+<li>创建 <code>InstanceRecord</code>（状态 <code>starting</code>，UUID）</li>
+<li>调用 <code>createRpcProcessInstance</code> 启动 coding-agent 子进程</li>
+<li>绑定事件监听器和退出处理器</li>
+<li>调用 <code>syncInstanceRecord</code> 获取 session 信息</li>
+<li>通过 Radius 注册 Pi</li>
+<li>状态转为 <code>online</code></li>
+</ol>
+<p>失败时调用 <code>failSpawn</code> 清理资源并将状态标记为 <code>error</code> → <code>stopped</code>。</p>
+<h3>stopInstance</h3>
+<pre><code>stopInstance(instanceId) → InstanceRecord | undefined
+</code></pre>
+<ol>
+<li>状态标记为 <code>stopping</code></li>
+<li>清理绑定（事件监听、UI handler）</li>
+<li>断开 Radius Pi 连接</li>
+<li>调用 <code>rpcProcess.dispose()</code>（发送 SIGTERM 并等待退出）</li>
+<li>从 <code>liveInstances</code> 中移除，持久化状态为 <code>stopped</code></li>
+</ol>
+<h3>handleRpc</h3>
+<pre><code>handleRpc(instanceId, command) → RpcResponse | undefined
+</code></pre>
+<p>将 RPC 命令转发到对应实例的子进程。执行后如果命令属于会话元数据变更类型（<code>new_session</code>/<code>switch_session</code>/<code>fork</code>/<code>clone</code>/<code>set_session_name</code>/<code>prompt</code>），自动调用 <code>syncInstanceRecord</code> 刷新持久化的 session 信息。</p>
+<h3>openRpcStream</h3>
+<pre><code>openRpcStream(instanceId, onEvent, onUiRequest) → { handleRpc, handleUiResponse, close } | undefined
+</code></pre>
+<p>为指定实例打开 RPC 流，返回句柄供 IPC server 的长连接使用。注册事件监听器和 UI 请求回调，关闭时清理订阅。</p>
+<h3>recoverAfterRestart</h3>
+<p>守护进程重启时调用：将 <code>online</code>/<code>starting</code> 状态的实例标记为 <code>stopped</code>，断开所有 Radius Pi 连接。</p>
+<hr />
+</section>
+
+<section id="coding-agent-c96168cb">
+<h2 id="coding-agent-c96168cb">与 coding-agent 的关系</h2>
+<p>orchestrator 将 coding-agent 作为子进程管理。<code>RpcProcessInstance</code> 的 <code>getSpawnCommand()</code>（<code>src/rpc-process.ts:50-61</code>）根据运行环境选择启动方式：</p>
+<ul>
+<li><strong>Bun 二进制</strong>：执行 <code>pi --mode rpc</code>（与可执行文件同目录）</li>
+<li><strong>Node</strong>：通过 <code>require.resolve("@earendil-works/pi-coding-agent/rpc-entry")</code> 加载 RPC 入口</li>
+</ul>
+<p>子进程通过 stdin/stdout 接收 JSONL 格式的 <code>RpcCommand</code>，返回 <code>RpcResponse</code> 和 <code>AgentSessionEvent</code>。orchestrator 不关心 coding-agent 的内部状态，仅作为透明代理传递 RPC 消息。</p>
+<hr />
+</section>
+
+<section id="radius-eef3ff8f">
+<h2 id="radius-eef3ff8f">Radius 云集成</h2>
+<p><code>RadiusPresence</code>（<code>src/radius.ts</code>）负责将 orchestrator 管理的机器和 Pi 实例注册到 Radius 云平台（<code>radius.pi.dev</code>）。</p>
+<h3>机器注册</h3>
+<p>守护进程启动时（<code>src/serve.ts:21</code>）调用 <code>radiusPresence.start()</code>：</p>
+<ol>
+<li>调用 <code>POST /machines/register</code> 注册机器（上报 hostname、platform、arch、version）</li>
+<li>持久化到 <code>machine.json</code></li>
+<li>启动心跳循环，按服务端返回的 <code>heartbeatIntervalMs</code> 定时发送 <code>POST /machines/{id}/heartbeat</code></li>
+</ol>
+<h3>Pi 注册</h3>
+<p>每次 <code>spawnInstance</code> 成功后（<code>src/supervisor.ts:291</code>）调用 <code>radiusPresence.registerPi()</code>：</p>
+<ol>
+<li>调用 <code>POST /pis/register</code>（上报 machineId、label、cwd、sessionId）</li>
+<li>记录返回的 <code>radiusPiId</code></li>
+<li>启动 Pi 级别心跳循环</li>
+</ol>
+<h3>心跳容错</h3>
+<p>心跳采用<strong>指数退避 + 随机抖动</strong>策略（<code>src/radius.ts:81-88</code>）：</p>
+<ul>
+<li>基础间隔 1s，最大 30s</li>
+<li>每次失败后延迟 = <code>min(30s, 1000ms × 2^(failureCount-1))</code> + 随机抖动（最多 25%）</li>
+<li>连续 3 次 404 后触发重新注册</li>
+</ul>
+<p>Pi 断开时（<code>stopInstance</code> 或意外退出），调用 <code>POST /pis/{id}/disconnect</code>。</p>
+<h3>认证</h3>
+<p>Radius 认证通过 <code>~/.pi/agent/auth.json</code> 中的 OAuth credential 或环境变量 <code>PI_RADIUS_API_KEY</code>（<code>src/radius.ts:130-142</code>）。可通过 <code>PI_RADIUS_URL</code> 和 <code>PI_RADIUS_ORCHESTRATOR_URL</code> 自定义 API 端点。</p>
+<hr />
+</section>
+
+<section id="sec-efbcc1fb">
+<h2 id="sec-efbcc1fb">数据持久化</h2>
+<p>orchestrator 在 <code>~/.pi/orchestrator/</code>（可通过 <code>PI_ORCHESTRATOR_DIR</code> 自定义）下维护两个 JSON 文件：</p>
+<ul>
+<li><strong><code>machine.json</code></strong>：机器注册信息（<code>id</code>、<code>createdAt</code>、<code>label</code>），由 <code>src/storage.ts</code> 的 <code>loadMachine</code>/<code>saveMachine</code> 管理</li>
+<li><strong><code>instances.json</code></strong>：实例列表（<code>id</code>、<code>status</code>、<code>cwd</code>、<code>sessionId</code>、<code>radiusPiId</code> 等），由 <code>loadInstances</code>/<code>saveInstances</code>/<code>upsertInstance</code>/<code>removeInstance</code> 管理</li>
+</ul>
+<p>每次实例状态变更都会即时写入 <code>instances.json</code>，确保守护进程重启后可通过 <code>recoverAfterRestart</code> 恢复一致状态。</p>
+<hr />
+</section>
+
+<section id="sec-176808a1">
+<h2 id="sec-176808a1">生命周期</h2>
+<pre><code>orchestrator serve
+  ├─ 创建 socket
+  ├─ recoverAfterRestart()     ← 恢复上次状态，标记旧实例为 stopped
+  ├─ radiusPresence.start()    ← 注册机器，启动心跳
+  ├─ 监听 socket 连接
+  │   ├─ spawn  → spawnInstance()  → 启动 coding-agent 子进程 → 注册 Radius Pi
+  │   ├─ rpc    → handleRpc()      → 转发命令到子进程 → 返回响应
+  │   ├─ stop   → stopInstance()   → 清理子进程 → 断开 Radius Pi
+  │   └─ ...
+  └─ SIGINT/SIGTERM
+      ├─ supervisor.shutdown() ← 停止所有实例
+      ├─ radiusPresence.stop() ← 断开机器连接
+      └─ 删除 socket
+</code></pre>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="pi-tui.html">← pi-tui</a>
+  <a class="next" href="extension-system.html">扩展系统 →</a>
+</div>
+</main>
+</body>
+</html>

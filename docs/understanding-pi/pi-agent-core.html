@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-agent-core 包设计 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">pi-agent-core</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a class="current" href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-a4d3b02a">概述</a></li>
+      <li><a href="#agent-94500090">Agent 类</a></li>
+      <li><a href="#agent-loop-ts-turn-4e3a37f9">agent-loop.ts：Turn 循环</a></li>
+      <li><a href="#types-ts-28ff87aa">types.ts：核心类型</a></li>
+      <li><a href="#agentharness-c8a7d6c8">AgentHarness 子系统</a></li>
+      <li><a href="#session-4bba6035">Session 子系统</a></li>
+      <li><a href="#compaction-63fd14d5">Compaction 子系统</a></li>
+      <li><a href="#proxy-ts-streamproxy-22922f23">proxy.ts（streamProxy）</a></li>
+      <li><a href="#node-ts-1224dc7d">node.ts</a></li>
+      <li><a href="#sec-478ec473">包导出结构</a></li>
+      <li><a href="#sec-ee4989c2">相关文档</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>pi-agent-core 设计文档</h1>
+<blockquote>
+<p>npm 包：<code>@earendil-works/pi-agent-core</code> | 源码目录：<code>packages/agent/</code></p>
+</blockquote>
+</section>
+
+<section id="sec-a4d3b02a">
+<h2 id="sec-a4d3b02a">概述</h2>
+<p><code>@earendil-works/pi-agent-core</code> 是 Pi 代理工具链的状态化代理运行时（agent runtime），提供有状态代理（Agent）、工具执行（tool execution）、事件流（event streaming）和会话持久化（session persistence）等核心能力。它建立在 <code>@earendil-works/pi-ai</code> 之上，向上被 <code>@earendil-works/pi-coding-agent</code> 使用。</p>
+<p>该包导出四层 API：</p>
+<ul>
+<li><strong>高层 API</strong>：<code>Agent</code> 类（<code>packages/agent/src/agent.ts</code>）——有状态封装，管理消息历史、工具注册、事件订阅（steering/follow-up）和生命周期控制（prompt/continue/abort）。</li>
+<li><strong>编排层 API</strong>：<code>AgentHarness</code> 类（<code>packages/agent/src/harness/agent-harness.ts</code>）——在 Agent 之上提供会话持久化、运行时配置管理、操作锁、compaction、树导航和扩展钩子子系统。<strong>注意：AgentHarness 不直接使用 Agent 类，而是直接调用 <code>runAgentLoop()</code></strong>（见 <code>agent-harness.ts</code> 的 <code>executeTurn</code> 方法，第 531 行起）。</li>
+<li><strong>低层 API</strong>：<code>agentLoop</code>、<code>agentLoopContinue</code>、<code>runAgentLoop</code>、<code>runAgentLoopContinue</code>（<code>packages/agent/src/agent-loop.ts</code>）——无状态的事件流，适合需要自定义事件处理的场景。</li>
+<li><strong>代理函数</strong>：<code>streamProxy</code>（<code>packages/agent/src/proxy.ts</code>）——将模型请求代理到后端服务，适用于浏览器环境。</li>
+</ul>
+</section>
+
+<section id="agent-94500090">
+<h2 id="agent-94500090">Agent 类</h2>
+<p>源码：<code>packages/agent/src/agent.ts</code></p>
+<p><code>Agent</code> 是低层 <code>runAgentLoop</code> 的有状态封装。它拥有当前对话记录（transcript），发出生命周期事件，执行工具，并提供队列 API（steering/follow-up）。与低层 <code>agentLoop()</code> 不同，Agent 确保事件监听器的异步处理在工具执行前完成——<code>message_end</code> 处理作为工具预检前的屏障。</p>
+<h3>状态管理</h3>
+<p>Agent 内部状态定义在 <code>MutableAgentState</code>（<code>agent.ts</code> 第 60-65 行），是 <code>AgentState</code>（<code>packages/agent/src/types.ts</code> 第 322-347 行）的可变版本。</p>
+<pre><code class="language-typescript">// types.ts 第 322-347 行
+interface AgentState {
+  systemPrompt: string;
+  model: Model&lt;any&gt;;
+  thinkingLevel: ThinkingLevel;
+  tools: AgentTool&lt;any&gt;[];
+  messages: AgentMessage[];
+  readonly isStreaming: boolean;
+  readonly streamingMessage?: AgentMessage;
+  readonly pendingToolCalls: ReadonlySet&lt;string&gt;;
+  readonly errorMessage?: string;
+}
+</code></pre>
+<p><code>tools</code> 和 <code>messages</code> 的 setter 使用 accessor 实现（<code>agent.ts</code> 第 77-93 行），赋值时拷贝顶层数组，防止外部持有引用后意外修改内部状态。<code>pendingToolCalls</code> 使用 <code>Set&lt;string&gt;</code> 跟踪当前正在执行工具调用的 ID。</p>
+<p>状态通过 <code>agent.state</code> 暴露，其中 <code>isStreaming</code>、<code>streamingMessage</code>、<code>pendingToolCalls</code>、<code>errorMessage</code> 为 <code>readonly</code>。在流式传输期间，<code>agent.state.streamingMessage</code> 包含当前部分完成的 assistant 消息。<code>agent.state.isStreaming</code> 在运行完全结束（包括 <code>agent_end</code> 订阅者 await 完成）前保持 <code>true</code>。</p>
+<h3>prompt / continue / abort</h3>
+<ul>
+<li><strong><code>prompt(input, images?)</code></strong>（<code>agent.ts</code> 第 334-345 行）：接受字符串、<code>AgentMessage</code> 或消息数组。将输入规范化为 <code>AgentMessage[]</code>，然后调用 <code>runPromptMessages()</code>，后者通过 <code>runAgentLoop()</code> 启动低层循环。如果已有活跃运行则抛出错误。</li>
+<li><strong><code>continue()</code></strong>（<code>agent.ts</code> 第 348-375 行）：从当前 transcript 恢复。最后一条消息必须是 user 或 toolResult（不能是 assistant）。如果最后是 assistant 消息，会先尝试 drain steering 和 follow-up 队列。</li>
+<li><strong><code>abort()</code></strong>（<code>agent.ts</code> 第 310-312 行）：取消当前运行（通过 <code>AbortController.abort()</code>）。不会丢弃队列中的消息。</li>
+<li><strong><code>waitForIdle()</code></strong>（<code>agent.ts</code> 第 319-321 行）：等待当前运行和所有 <code>agent_end</code> 监听器完成。</li>
+<li><strong><code>reset()</code></strong>（<code>agent.ts</code> 第 324-332 行）：清除 transcript 状态、运行时状态和队列消息。</li>
+</ul>
+<h3>事件订阅模型</h3>
+<p><code>subscribe()</code> 方法（<code>agent.ts</code> 第 241-244 行）注册生命周期监听器。监听器 Promise 按注册顺序 await，且计入当前运行的 settlement。<code>agent_end</code> 是运行的最终事件，但 agent 在所有 <code>agent_end</code> 监听器 settle 后可变为 idle。</p>
+<p>事件通过 <code>processEvents()</code> 方法（<code>agent.ts</code> 第 527-574 行）处理：</p>
+<ol>
+<li>根据事件类型更新内部状态（<code>message_start</code> 设置 <code>streamingMessage</code>，<code>message_end</code> 将消息推入 <code>_state.messages</code> 等）</li>
+<li>依次 await 所有注册的监听器</li>
+</ol>
+<p>关键设计：<code>message_end</code> 处理在工具预检（<code>beforeToolCall</code>）前完成，因此 <code>beforeToolCall</code> 看到的 agent 状态已包含请求工具调用的 assistant 消息。</p>
+<h3>事件类型</h3>
+<p><code>AgentEvent</code> 定义在 <code>packages/agent/src/types.ts</code> 第 413 行起：</p>
+<table>
+<thead>
+<tr>
+<th>事件</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agent_start</code></td>
+<td>Agent 开始处理</td>
+</tr>
+<tr>
+<td><code>agent_end</code></td>
+<td>运行的最终事件，awaited 订阅者计入 settlement</td>
+</tr>
+<tr>
+<td><code>turn_start</code></td>
+<td>新 turn 开始（一次 LLM 调用 + 工具执行）</td>
+</tr>
+<tr>
+<td><code>turn_end</code></td>
+<td>Turn 完成，携带 assistant 消息和工具结果</td>
+</tr>
+<tr>
+<td><code>message_start</code></td>
+<td>消息开始（user、assistant、toolResult）</td>
+</tr>
+<tr>
+<td><code>message_update</code></td>
+<td>仅 assistant。包含 <code>assistantMessageEvent</code> 和 delta</td>
+</tr>
+<tr>
+<td><code>message_end</code></td>
+<td>消息完成</td>
+</tr>
+<tr>
+<td><code>tool_execution_start</code></td>
+<td>工具开始执行</td>
+</tr>
+<tr>
+<td><code>tool_execution_update</code></td>
+<td>工具流式推送进度</td>
+</tr>
+<tr>
+<td><code>tool_execution_end</code></td>
+<td>工具执行完成</td>
+</tr>
+</tbody>
+</table>
+<h3>Steering 和 Follow-up 队列</h3>
+<p>Steering 消息用于在工具运行时中断 agent，follow-up 消息用于在 agent 正常停止后排队追加工作。</p>
+<ul>
+<li><strong><code>steer(message)</code></strong>（<code>agent.ts</code> 第 274-276 行）：排队 steering 消息，在当前 assistant turn 完成后注入</li>
+<li><strong><code>followUp(message)</code></strong>（<code>agent.ts</code> 第 279-281 行）：排队 follow-up 消息，仅在无工具调用和 steering 消息时才注入</li>
+<li>队列模式（<code>agent.ts</code> 第 256-271 行）：<code>"one-at-a-time"</code>（默认，每次 drain 只取一条）或 <code>"all"</code>（一次取完所有排队消息）</li>
+<li><strong><code>clearSteeringQueue()</code></strong>、<strong><code>clearFollowUpQueue()</code></strong>、<strong><code>clearAllQueues()</code></strong>：清除排队消息</li>
+</ul>
+<p>当 turn 完成后检测到 steering 消息时：当前 assistant 消息的所有工具调用已完成 → 注入 steering 消息 → 下一 turn LLM 响应。Follow-up 消息仅在无工具调用且无 steering 消息时才检查。</p>
+<h3>配置选项</h3>
+<p>Agent 构造函数的 <code>AgentOptions</code>（<code>agent.ts</code> 第 97-121 行）包含：</p>
+<ul>
+<li><code>initialState</code>：初始状态（systemPrompt、model、thinkingLevel、tools、messages）</li>
+<li><code>convertToLlm</code>：将 <code>AgentMessage[]</code> 转换为 LLM <code>Message[]</code></li>
+<li><code>transformContext</code>：在 <code>convertToLlm</code> 前裁剪或注入上下文</li>
+<li><code>streamFn</code>：自定义流函数（默认 <code>streamSimple</code>）</li>
+<li><code>getApiKey</code>：动态 API Key 解析（用于过期 OAuth token）</li>
+<li><code>beforeToolCall</code> / <code>afterToolCall</code>：工具钩子</li>
+<li><code>prepareNextTurn</code> / <code>prepareNextTurnWithContext</code>：turn 间状态准备</li>
+<li><code>steeringMode</code> / <code>followUpMode</code>：队列模式</li>
+<li><code>sessionId</code>：用于 provider 缓存的会话 ID</li>
+<li><code>thinkingBudgets</code>：token 提供商的思考预算</li>
+<li><code>toolExecution</code>：工具执行模式</li>
+</ul>
+</section>
+
+<section id="agent-loop-ts-turn-4e3a37f9">
+<h2 id="agent-loop-ts-turn-4e3a37f9">agent-loop.ts：Turn 循环</h2>
+<p>源码：<code>packages/agent/src/agent-loop.ts</code></p>
+<h3>runLoop 双层循环结构</h3>
+<p>核心函数 <code>runLoop()</code>（<code>agent-loop.ts</code> 第 155-269 行）实现双层循环：</p>
+<ul>
+<li><strong>外层循环</strong>：在 follow-up 消息到达时继续（agent 本应停止后注入新消息）</li>
+<li><strong>内层循环</strong>：处理工具调用和 steering 消息</li>
+</ul>
+<pre><code>runLoop:
+  while (true) {                              // 外层：follow-up 循环
+    while (hasMoreToolCalls || pending) {     // 内层：工具 + steering 循环
+      emit turn_start
+      drain pending messages (steering)
+      streamAssistantResponse -&gt; LLM 调用
+      if (tool calls) executeToolCalls
+      emit turn_end
+      check shouldStopAfterTurn
+      drain steering messages -&gt; pending
+    }
+    drain follow-up messages -&gt; pending
+    if (no follow-up) break
+  }
+  emit agent_end
+</code></pre>
+<p>关键流程：</p>
+<ol>
+<li>首次进入时检查 steering 消息（用户可能在等待时输入）</li>
+<li>注入 pending 消息（steering 或 follow-up）</li>
+<li>调用 <code>streamAssistantResponse()</code> 获取 LLM 响应</li>
+<li>如果有工具调用，执行工具</li>
+<li>发出 <code>turn_end</code></li>
+<li>检查 <code>shouldStopAfterTurn</code> 回调</li>
+<li>从 <code>getSteeringMessages()</code> 获取新的 steering 消息</li>
+<li>内层循环结束后，从 <code>getFollowUpMessages()</code> 获取 follow-up 消息</li>
+</ol>
+<h3>消息转换流程</h3>
+<p>每次 LLM 调用前，消息经过两级转换（<code>streamAssistantResponse</code>，<code>agent-loop.ts</code> 第 275-368 行）：</p>
+<pre><code>AgentMessage[] -&gt; transformContext() -&gt; AgentMessage[] -&gt; convertToLlm() -&gt; Message[] -&gt; LLM
+                     (可选)                                (必需)
+</code></pre>
+<ol>
+<li><strong>transformContext</strong>：裁剪旧消息、注入外部上下文</li>
+<li><strong>convertToLlm</strong>：过滤 UI-only 消息、将自定义类型转换为 LLM 格式</li>
+</ol>
+<h3>工具执行：并行 vs 串行</h3>
+<p>工具执行模式通过 <code>executeToolCalls()</code>（<code>agent-loop.ts</code> 第 373-388 行）控制：</p>
+<ul>
+<li><strong><code>parallel</code></strong>（默认）：顺序预检工具调用（preflight），然后并发执行允许的工具。<code>tool_execution_end</code> 按工具完成顺序发出，但持久化的 toolResult 消息按 assistant 源顺序发出</li>
+<li><strong><code>sequential</code></strong>：逐个执行工具调用，匹配历史行为</li>
+</ul>
+<p>如果任何工具调用目标的工具设置了 <code>executionMode: "sequential"</code>，整个批次强制串行执行，忽略全局设置。</p>
+<p>并行执行流程（<code>executeToolCallsParallel</code>，<code>agent-loop.ts</code> 第 451-516 行）：</p>
+<ol>
+<li>顺序预检所有工具调用（验证参数、调用 <code>beforeToolCall</code>）</li>
+<li>并发执行所有已预检的工具（<code>Promise.all</code>）</li>
+<li>每个工具完成后发出 <code>tool_execution_end</code></li>
+<li>按 assistant 源顺序发出 toolResult 消息</li>
+</ol>
+<p>串行执行流程（<code>executeToolCallsSequential</code>，<code>agent-loop.ts</code> 第 395-449 行）：</p>
+<ol>
+<li>逐个预检、执行、完成工具调用</li>
+<li>每个工具完成后立即发出 <code>tool_execution_end</code> 和 toolResult 消息</li>
+</ol>
+<h3>beforeToolCall / afterToolCall 钩子</h3>
+<ul>
+<li><strong><code>beforeToolCall</code></strong>（<code>types.ts</code> 第 89-98 行的 <code>BeforeToolCallContext</code>）：在 <code>tool_execution_start</code> 和参数验证后运行。返回 <code>{ block: true, reason: "..." }</code> 可阻止工具执行，循环发出一个错误 toolResult。</li>
+<li><strong><code>afterToolCall</code></strong>（<code>types.ts</code> 第 101-114 行的 <code>AfterToolCallContext</code>）：在工具执行完成后、<code>tool_execution_end</code> 和最终 toolResult 事件发出前运行。可返回 <code>{ terminate: true }</code> 跳过自动 LLM 跟进调用，或返回 <code>{ details: {...} }</code> 覆盖 toolResult 的 details。</li>
+</ul>
+<h3>shouldStopAfterTurn</h3>
+<p><code>shouldStopAfterTurn</code>（<code>types.ts</code> 第 117 行起的 <code>ShouldStopAfterTurnContext</code>）在 <code>turn_end</code> 发出后、assistant 响应和工具执行正常完成后运行。如果返回 <code>true</code>，循环发出 <code>agent_end</code> 并退出，不会轮询 steering/follow-up 队列，也不会启动新的 LLM 调用。它不会中止 provider 流、不会取消运行中的工具、不会修改 assistant 消息的 stopReason。</p>
+<h3>prepareNextTurn</h3>
+<p><code>prepareNextTurn</code>（<code>types.ts</code> 第 129 行起的 <code>AgentLoopTurnUpdate</code>）在 <code>turn_end</code> 发出后运行，允许在下一 turn 前更新 context、model 和 thinkingLevel。常用于 save-point 快照刷新。</p>
+</section>
+
+<section id="types-ts-28ff87aa">
+<h2 id="types-ts-28ff87aa">types.ts：核心类型</h2>
+<p>源码：<code>packages/agent/src/types.ts</code></p>
+<h3>AgentMessage</h3>
+<pre><code class="language-typescript">// types.ts 第 314 行
+type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
+</code></pre>
+<p><code>AgentMessage</code> 是 <code>@earendil-works/pi-ai</code> 中 <code>Message</code>（<code>UserMessage | AssistantMessage | ToolResultMessage</code>）与自定义消息类型的联合。通过 TypeScript declaration merging 扩展：</p>
+<pre><code class="language-typescript">declare module &quot;@earendil-works/pi-agent-core&quot; {
+  interface CustomAgentMessages {
+    notification: { role: &quot;notification&quot;; text: string; timestamp: number };
+  }
+}
+</code></pre>
+<p>LLM 只理解 <code>user</code>、<code>assistant</code>、<code>toolResult</code> 三种角色。<code>convertToLlm</code> 函数在每次 LLM 调用前过滤和转换消息，将自定义类型映射为 LLM 兼容格式。</p>
+<h3>AgentTool</h3>
+<pre><code class="language-typescript">// types.ts 第 371-394 行
+interface AgentTool&lt;TParameters extends TSchema = TSchema, TDetails = any&gt; extends Tool&lt;TParameters&gt; {
+  label: string;
+  prepareArguments?: (args: unknown) =&gt; Static&lt;TParameters&gt;;
+  execute: (
+    toolCallId: string,
+    params: Static&lt;TParameters&gt;,
+    signal?: AbortSignal,
+    onUpdate?: AgentToolUpdateCallback&lt;TDetails&gt;,
+  ) =&gt; Promise&lt;AgentToolResult&lt;TDetails&gt;&gt;;
+  executionMode?: ToolExecutionMode;
+}
+</code></pre>
+<p>关键设计：</p>
+<ul>
+<li><code>execute</code> 在失败时抛出错误（不返回错误消息作为 content），错误被 agent 捕获并以 <code>isError: true</code> 报告给 LLM</li>
+<li><code>onUpdate</code> 回调用于流式推送部分执行结果（触发 <code>tool_execution_update</code> 事件）</li>
+<li>返回 <code>terminate: true</code> 提示 agent 在当前批次后停止（仅当批次中所有工具结果都设置时才生效）</li>
+<li><code>executionMode</code> 可覆盖单个工具的并行/串行行为</li>
+</ul>
+<h3>AgentState</h3>
+<p><code>AgentState</code>（<code>types.ts</code> 第 322-347 行）是 agent 的公共状态接口。通过 <code>agent.state</code> 访问。赋值 <code>agent.state.tools = [...]</code> 或 <code>agent.state.messages = [...]</code> 会拷贝顶层数组后存储。</p>
+<h3>AgentEvent</h3>
+<p><code>AgentEvent</code>（<code>types.ts</code> 第 413 行起）是所有 agent 生命周期事件的联合类型，共 10 种事件类型。每个事件携带不同的 payload：</p>
+<ul>
+<li><code>agent_start</code> / <code>agent_end</code>：运行边界，<code>agent_end</code> 携带 <code>messages: AgentMessage[]</code></li>
+<li><code>turn_start</code> / <code>turn_end</code>：turn 边界，<code>turn_end</code> 携带 <code>message</code> 和 <code>toolResults</code></li>
+<li><code>message_start</code> / <code>message_update</code> / <code>message_end</code>：消息生命周期</li>
+<li><code>tool_execution_start</code> / <code>tool_execution_update</code> / <code>tool_execution_end</code>：工具执行生命周期</li>
+</ul>
+<h3>CustomAgentMessages 声明合并</h3>
+<p><code>CustomAgentMessages</code> 接口（<code>types.ts</code> 第 305-309 行）是一个空接口，通过 TypeScript declaration merging 扩展。应用可以添加自定义消息角色，无需修改核心类型。<code>AgentMessage</code> 联合类型自动包含所有扩展的消息类型。</p>
+<h3>其他关键类型</h3>
+<ul>
+<li><strong><code>AgentContext</code></strong>（<code>types.ts</code> 第 397-404 行）：传递给低层循环的上下文快照，包含 <code>systemPrompt</code>、<code>messages</code>、<code>tools</code></li>
+<li><strong><code>AgentLoopConfig</code></strong>（<code>types.ts</code> 第 140 行起）：低层循环配置，包含 <code>model</code>、<code>convertToLlm</code>、<code>transformContext</code>、<code>toolExecution</code>、<code>beforeToolCall</code>、<code>afterToolCall</code>、<code>shouldStopAfterTurn</code>、<code>getSteeringMessages</code>、<code>getFollowUpMessages</code>、<code>prepareNextTurn</code> 等</li>
+<li><strong><code>StreamFn</code></strong>（<code>types.ts</code> 第 27-31 行）：自定义流函数类型，签名为 <code>(model, context, options?) =&gt; AssistantMessageEventStream</code></li>
+<li><strong><code>QueueMode</code></strong>（<code>types.ts</code> 第 49 行）：<code>"all"</code> 或 <code>"one-at-a-time"</code></li>
+<li><strong><code>ToolExecutionMode</code></strong>（<code>types.ts</code> 第 41 行）：<code>"sequential"</code> 或 <code>"parallel"</code></li>
+<li><strong><code>AgentToolResult&lt;T&gt;</code></strong>（<code>types.ts</code> 第 350-360 行）：工具执行结果，包含 <code>content</code>、<code>details</code> 和可选的 <code>terminate</code></li>
+<li><strong><code>ThinkingLevel</code></strong>（<code>types.ts</code> 第 289 行）：<code>"off" | "minimal" | "low" | "medium" | "high" | "xhigh"</code></li>
+</ul>
+</section>
+
+<section id="agentharness-c8a7d6c8">
+<h2 id="agentharness-c8a7d6c8">AgentHarness 子系统</h2>
+<p>源码：<code>packages/agent/src/harness/agent-harness.ts</code></p>
+<p><code>AgentHarness</code> 是低层 agent loop 之上的编排层。它拥有会话持久化、运行时配置管理、资源解析、操作锁和扩展钩子语义。详细设计文档见 <code>packages/agent/docs/agent-harness.md</code>，本节聚焦核心架构。</p>
+<h3>与 Agent 类的关系</h3>
+<p><strong>AgentHarness 不直接使用 Agent 类。</strong> 它直接调用 <code>runAgentLoop()</code>（从 <code>agent-loop.ts</code> 导入），自己管理运行生命周期、abort controller、队列 draining、provider 流配置、事件归约、会话持久化、pending write 刷新和 save-point 快照。具体见 <code>agent-harness.ts</code> 的 <code>executeTurn()</code> 方法（第 531 行起）。</p>
+<h3>会话持久化</h3>
+<p>Harness 通过 <code>Session</code> 类（<code>packages/agent/src/harness/session/session.ts</code> 第 82 行）管理会话。<code>Session</code> 封装了 <code>SessionStorage</code> 接口，提供：</p>
+<ul>
+<li><strong><code>appendMessage(message)</code></strong>（<code>session.ts</code> 第 132 行）：追加消息条目，自动生成 id 和 parentId</li>
+<li><strong><code>getBranch(fromId?)</code></strong>（<code>session.ts</code> 第 109 行）：获取从叶节点到根的路径</li>
+<li><strong><code>buildContext()</code></strong>（<code>session.ts</code> 第 114 行）：从分支条目构建 <code>AgentContext</code></li>
+<li><strong><code>appendCompaction(summary, firstKeptEntryId, ...)</code></strong>（<code>session.ts</code> 第 173 行）：追加 compaction 条目</li>
+<li><strong><code>moveTo(entryId, summary?)</code></strong>（<code>session.ts</code> 第 247 行）：移动叶指针并可选地追加分支摘要</li>
+</ul>
+<p>在 harness 中，会话写入分为两种情况：</p>
+<ul>
+<li><strong>idle 阶段</strong>：直接持久化到 session</li>
+<li><strong>busy 阶段</strong>：排队为 <code>pendingSessionWrites</code>，在 save point、settlement 或 failure cleanup 时刷新</li>
+</ul>
+<h3>Turn 快照</h3>
+<p>Turn 快照（<code>AgentHarnessTurnState</code>，<code>agent-harness.ts</code> 第 141-155 行）是单次 LLM turn 使用的具体状态，由 <code>createTurnState()</code> 创建，包含：</p>
+<ul>
+<li>持久化会话消息（<code>messages</code>）</li>
+<li>已解析的资源和 system prompt</li>
+<li>model、thinking level、所有工具、活跃工具</li>
+<li>stream options 和派生的 session id</li>
+</ul>
+<p>静态选项值直接使用。system prompt provider 回调每次 <code>createTurnState()</code> 调用时执行一次。该 turn 的所有逻辑使用同一快照。</p>
+<h3>阶段状态机</h3>
+<p>Harness 有显式的阶段（<code>AgentHarnessPhase</code>，<code>packages/agent/src/harness/types.ts</code> 第 492 行）：</p>
+<pre><code class="language-typescript">type AgentHarnessPhase = &quot;idle&quot; | &quot;turn&quot; | &quot;compaction&quot; | &quot;branch_summary&quot; | &quot;retry&quot;;
+</code></pre>
+<p>结构性操作（<code>prompt</code>、<code>skill</code>、<code>promptFromTemplate</code>、<code>compact</code>、<code>navigateTree</code>）要求 <code>phase === "idle"</code>，在第一个 <code>await</code> 前同步设置阶段。忙碌时启动另一个结构性操作会以 <code>AgentHarnessError</code> 代码 <code>"busy"</code> 拒绝。</p>
+<p>以下操作在 turn 期间允许：</p>
+<ul>
+<li><code>steer</code>、<code>followUp</code>、<code>nextTurn</code>、<code>abort</code></li>
+<li>运行时配置 setter（影响下一 turn 快照，不改变当前 provider 请求）</li>
+</ul>
+<h3>Save Points</h3>
+<p>Save point 在 assistant turn 及其 toolResult 消息完成后发生。在 save point 时 harness：</p>
+<ol>
+<li>在 agent 发出的消息之后刷新 pending session writes</li>
+<li>如果低层循环可能继续，创建新的 turn 快照</li>
+<li>在下一个 provider 请求前应用新的 context/model/thinking-level/stream-options/session-id 状态</li>
+</ol>
+<p>这使得 turn 期间对 model、thinking level、tool、resource、stream option 和 system prompt 的更改能影响同一运行中的下一个 turn，同时绝不改变正在进行的 provider 请求。</p>
+<h3>Pending Writes</h3>
+<p>会话写入在 busy 期间排队为 pending session writes（<code>agent-harness.ts</code> 的 <code>pendingSessionWrites</code> 数组）。Pending writes 基于 session entry 形状，不包含生成的字段（<code>id</code>、<code>parentId</code>、<code>timestamp</code>）。它们始终被持久化，在 save points、操作 settlement 和 failure cleanup 时刷新。</p>
+<p>Agent 发出的消息在 <code>message_end</code> 时持久化以保持 transcript 顺序。Pending extension/session writes 在这些消息之后的 save points 刷新。</p>
+<h3>Provider Hooks</h3>
+<p>Harness 提供三个 provider 钩子（<code>agent-harness.ts</code> 第 251-292 行）：</p>
+<ul>
+<li><strong><code>before_provider_request</code></strong>：在 provider 请求前运行，可修改 stream options（支持 patch 链式调用和显式字段删除）</li>
+<li><strong><code>before_provider_payload</code></strong>：在 payload 发送前运行，可修改请求体</li>
+<li><strong><code>after_provider_response</code></strong>：在 provider 响应后运行</li>
+</ul>
+<h3>Compaction</h3>
+<p>Compaction 操作（<code>agent-harness.ts</code> 第 686-730 行）在 idle 时执行：</p>
+<ol>
+<li>获取分支条目 → 调用 <code>prepareCompaction()</code> 准备</li>
+<li>发出 <code>session_before_compact</code> 钩子（扩展可提供自定义 compaction 结果）</li>
+<li>调用 <code>compact()</code> 执行实际压缩或使用钩子提供的结果</li>
+<li>追加 compaction 条目到 session</li>
+<li>发出 <code>session_compact</code> 事件</li>
+</ol>
+<h3>树导航</h3>
+<p>树导航操作（<code>agent-harness.ts</code> 第 732-827 行）在 idle 时执行：</p>
+<ol>
+<li>收集从旧叶到目标的分支条目</li>
+<li>发出 <code>session_before_tree</code> 钩子（扩展可提供自定义摘要）</li>
+<li>可选地使用 LLM 生成分支摘要</li>
+<li>调用 <code>session.moveTo()</code> 移动叶指针并追加分支摘要</li>
+<li>发出 <code>session_tree</code> 事件</li>
+</ol>
+</section>
+
+<section id="session-4bba6035">
+<h2 id="session-4bba6035">Session 子系统</h2>
+<h3>JSONL 存储</h3>
+<p>会话以 JSONL（JSON Lines）格式持久化。每行是一个独立的 JSON 条目。实现位于：</p>
+<ul>
+<li><strong><code>JsonlSessionStorage</code></strong>（<code>packages/agent/src/harness/session/jsonl-storage.ts</code> 第 171 行）：底层存储，管理文件的读写和条目追加</li>
+<li><strong><code>JsonlSessionRepo</code></strong>（<code>packages/agent/src/harness/session/jsonl-repo.ts</code> 第 38 行）：仓库层，管理会话的创建、打开、列出、删除和 fork</li>
+</ul>
+<p>文件系统操作通过 <code>FileSystem</code> 接口（<code>packages/agent/src/harness/types.ts</code> 第 252 行）抽象，支持 <code>readTextFile</code>、<code>appendFile</code>、<code>writeFile</code>、<code>listDir</code>、<code>exists</code>、<code>createDir</code>、<code>remove</code> 等操作。</p>
+<h3>树结构（id / parentId）</h3>
+<p>每个会话条目都有 <code>id</code> 和 <code>parentId</code> 字段，形成树结构：</p>
+<ul>
+<li><code>id</code>：条目的唯一标识符（UUIDv7）</li>
+<li><code>parentId</code>：父条目 ID（<code>null</code> 表示根节点）</li>
+</ul>
+<p>条目类型包括：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message</code></td>
+<td>LLM 消息（user、assistant、toolResult）</td>
+</tr>
+<tr>
+<td><code>thinking_level_change</code></td>
+<td>思考级别变更</td>
+</tr>
+<tr>
+<td><code>model_change</code></td>
+<td>模型变更</td>
+</tr>
+<tr>
+<td><code>active_tools_change</code></td>
+<td>活跃工具集变更</td>
+</tr>
+<tr>
+<td><code>compaction</code></td>
+<td>上下文压缩点</td>
+</tr>
+<tr>
+<td><code>branch_summary</code></td>
+<td>分支摘要</td>
+</tr>
+<tr>
+<td><code>custom_message</code></td>
+<td>自定义消息</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>用户标签（书签）</td>
+</tr>
+<tr>
+<td><code>session_info</code></td>
+<td>会话名称</td>
+</tr>
+<tr>
+<td><code>custom</code></td>
+<td>通用自定义条目</td>
+</tr>
+</tbody>
+</table>
+<p>叶指针（leaf pointer）通过 <code>leaf</code> 条目持久化。<code>setLeafId()</code> 不是仅内存操作，而是追加持久化条目，其 <code>targetId</code> 为活跃树叶或 <code>null</code>（根）。重新打开存储时必须从最新持久化的 leaf 条目重建当前叶。</p>
+<h3>UUIDv7</h3>
+<p>条目 ID 使用 UUIDv7 生成（<code>createSessionId()</code>，<code>packages/coding-agent/src/core/session-manager.ts</code> 第 204 行）。UUIDv7 是时间排序的 UUID，便于按创建时间排序和索引。</p>
+<h3>SessionManager（coding-agent 层）</h3>
+<p><code>SessionManager</code>（<code>packages/coding-agent/src/core/session-manager.ts</code> 第 780 行）是 coding-agent 层的会话管理器，在 <code>Session</code> 类之上提供更丰富的功能：</p>
+<ul>
+<li>会话列表、创建、打开、fork</li>
+<li>内存索引（<code>byId</code> Map）加速查询</li>
+<li>label 管理</li>
+<li>分支操作（<code>branch(fromId)</code>）</li>
+<li>树遍历</li>
+</ul>
+<h3>上下文构建</h3>
+<p><code>buildSessionContext()</code>（<code>packages/agent/src/harness/session/session.ts</code> 第 22 行）从分支条目构建 <code>SessionContext</code>：</p>
+<ol>
+<li>遍历条目提取 model、thinking level、active tools 和 compaction 信息</li>
+<li>如果有 compaction 条目，从 <code>firstKeptEntryId</code> 开始收集保留的消息，并前置 compaction summary 消息</li>
+<li>否则收集所有消息条目</li>
+</ol>
+</section>
+
+<section id="compaction-63fd14d5">
+<h2 id="compaction-63fd14d5">Compaction 子系统</h2>
+<p>源码：<code>packages/agent/src/harness/compaction/compaction.ts</code></p>
+<h3>prepareCompaction</h3>
+<p><code>prepareCompaction()</code>（<code>compaction.ts</code> 第 545 行）准备 compaction 输入：</p>
+<ol>
+<li>如果最后条目已是 compaction，返回 undefined（无需再次压缩）</li>
+<li>找到上一次 compaction 的位置和摘要</li>
+<li>计算当前 token 数</li>
+<li>调用 <code>findCutPoint()</code> 找到裁剪点</li>
+<li>提取要摘要的消息和 turn prefix 消息</li>
+<li>提取文件操作信息</li>
+</ol>
+<p>返回 <code>CompactionPreparation</code>（<code>compaction.ts</code> 第 525 行），包含 <code>firstKeptEntryId</code>、<code>messagesToSummarize</code>、<code>turnPrefixMessages</code>、<code>isSplitTurn</code>、<code>tokensBefore</code>、<code>previousSummary</code>、<code>fileOps</code> 和 <code>settings</code>。</p>
+<h3>分支摘要（Branch Summarization）</h3>
+<p><code>generateBranchSummary()</code>（<code>packages/agent/src/harness/compaction/branch-summarization.ts</code>）在树导航时生成分支变更摘要：</p>
+<ol>
+<li>收集从旧叶到新叶的条目</li>
+<li>使用 LLM 生成结构化摘要（包含 readFiles、modifiedFiles 等）</li>
+<li>摘要作为 <code>branch_summary</code> 条目持久化</li>
+</ol>
+<h3>serializeConversation</h3>
+<p><code>serializeConversation()</code>（<code>packages/agent/src/harness/compaction/utils.ts</code> 第 91 行）将 LLM 消息序列化为纯文本，用于 compaction 和 branch summary 的 LLM 输入。它处理各种消息角色（user、assistant、toolResult），提取文本内容，并应用截断以避免超出 token 限制。</p>
+<h3>compact 主函数</h3>
+<p><code>compact()</code>（<code>compaction.ts</code> 第 630 行）执行实际的压缩：</p>
+<ol>
+<li>调用 <code>generateSummary()</code> 生成主摘要（如果有 previousSummary 则使用更新提示）</li>
+<li>如果 <code>isSplitTurn</code>，调用 <code>generateTurnPrefixSummary()</code> 生成 turn 前缀摘要</li>
+<li>返回 <code>CompactionResult</code>，包含 <code>summary</code>、<code>firstKeptEntryId</code>、<code>tokensBefore</code> 和可选的 <code>turnPrefixSummary</code></li>
+</ol>
+</section>
+
+<section id="proxy-ts-streamproxy-22922f23">
+<h2 id="proxy-ts-streamproxy-22922f23">proxy.ts（streamProxy）</h2>
+<p>源码：<code>packages/agent/src/proxy.ts</code></p>
+<p><code>streamProxy()</code>（<code>proxy.ts</code> 第 116 行）将模型请求代理到后端服务，适用于浏览器环境。它实现 <code>StreamFn</code> 接口：</p>
+<ol>
+<li>构造 <code>ProxySerializableStreamOptions</code>（可序列化的选项子集）</li>
+<li>通过 <code>fetch()</code> 向 <code>${proxyUrl}/api/stream</code> 发送 POST 请求</li>
+<li>使用 <code>Authorization: Bearer ${authToken}</code> 认证</li>
+<li>解析 SSE（Server-Sent Events）格式的响应流</li>
+<li>通过 <code>processProxyEvent()</code>（<code>proxy.ts</code> 第 238 行）将代理事件转换为 <code>AssistantMessageEvent</code> 流</li>
+</ol>
+<p>代理事件类型与 <code>AssistantMessageEvent</code> 一一对应（<code>start</code>、<code>text_start/delta/end</code>、<code>thinking_start/delta/end</code>、<code>toolcall_start/delta/end</code>、<code>done</code>、<code>error</code>）。</p>
+<p>使用示例：</p>
+<pre><code class="language-typescript">const agent = new Agent({
+  streamFn: (model, context, options) =&gt;
+    streamProxy(model, context, {
+      ...options,
+      authToken: &quot;...&quot;,
+      proxyUrl: &quot;https://your-server.com&quot;,
+    }),
+});
+</code></pre>
+</section>
+
+<section id="node-ts-1224dc7d">
+<h2 id="node-ts-1224dc7d">node.ts</h2>
+<p>源码：<code>packages/agent/src/node.ts</code></p>
+<p><code>node.ts</code> 是 Node.js 环境专用入口，导出：</p>
+<ul>
+<li><code>NodeExecutionEnv</code>（<code>packages/agent/src/harness/env/nodejs.ts</code>）：Node.js 文件系统和 shell 执行环境实现</li>
+<li>所有 <code>index.ts</code> 的导出（re-export）</li>
+</ul>
+</section>
+
+<section id="sec-478ec473">
+<h2 id="sec-478ec473">包导出结构</h2>
+<p><code>packages/agent/src/index.ts</code> 是主入口，导出所有公共 API：</p>
+<ul>
+<li><code>Agent</code> 类和 <code>AgentOptions</code></li>
+<li>低层循环函数：<code>agentLoop</code>、<code>agentLoopContinue</code>、<code>runAgentLoop</code>、<code>runAgentLoopContinue</code></li>
+<li>类型：<code>AgentMessage</code>、<code>AgentTool</code>、<code>AgentState</code>、<code>AgentEvent</code>、<code>AgentContext</code>、<code>AgentLoopConfig</code>、<code>StreamFn</code> 等</li>
+<li><code>streamProxy</code> 函数</li>
+<li>Harness 系统：<code>AgentHarness</code>、<code>Session</code>、<code>JsonlSessionRepo</code>、compaction 函数</li>
+</ul>
+</section>
+
+<section id="sec-ee4989c2">
+<h2 id="sec-ee4989c2">相关文档</h2>
+<ul>
+<li>包 README：<code>packages/agent/README.md</code>——使用指南和 API 参考</li>
+<li>Harness 设计文档：<code>packages/agent/docs/agent-harness.md</code>——AgentHarness 生命周期、状态模型、save points、hooks 详细设计</li>
+<li>Hooks 设计文档：<code>packages/agent/docs/hooks.md</code>——钩子系统设计</li>
+<li>Observability 设计文档：<code>packages/agent/docs/observability.md</code>——可观测性设计</li>
+<li>Durable Harness 设计文档：<code>packages/agent/docs/durable-harness.md</code>——半持久化恢复设计</li>
+<li>会话格式：<code>packages/coding-agent/docs/session-format.md</code>——JSONL 会话文件格式</li>
+<li>上下文压缩：<code>packages/coding-agent/docs/compaction.md</code>——面向用户的 compaction 说明</li>
+</ul>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="pi-ai.html">← pi-ai</a>
+  <a class="next" href="pi-coding-agent.html">pi-coding-agent →</a>
+</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-coding-agent 包设计 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">pi-coding-agent</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a class="current" href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-a4d3b02a">概述</a></li>
+      <li><a href="#cli-031c27d7">CLI 入口流程</a></li>
+      <li><a href="#core-cd4d7c61">core/ 子系统</a></li>
+      <li><a href="#sec-3da9e103">四种运行模式</a></li>
+      <li><a href="#sec-beb29273">扩展系统架构</a></li>
+      <li><a href="#sec-768b1459">内置工具</a></li>
+      <li><a href="#sec-348e0702">会话管理</a></li>
+      <li><a href="#sec-2cebeaa1">安全与容器化</a></li>
+      <li><a href="#sec-ee4989c2">相关文档</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>pi-coding-agent 设计文档</h1>
+<blockquote>
+<p>npm 包: <code>@earendil-works/pi-coding-agent</code> | 源码目录: <code>packages/coding-agent/</code></p>
+</blockquote>
+</section>
+
+<section id="sec-a4d3b02a">
+<h2 id="sec-a4d3b02a">概述</h2>
+<p><code>@earendil-works/pi-coding-agent</code> 是 Pi 的终端编码代理 CLI。它通过命令行参数解析、会话管理、扩展系统、工具注册和多种运行模式，将 <code>@earendil-works/pi-agent-core</code>(代理运行时)和 <code>@earendil-works/pi-ai</code>(LLM API 层)编排为一个完整的终端应用。</p>
+<p>核心设计原则:</p>
+<ul>
+<li><strong>SDK 作为单一入口</strong>: CLI(<code>main.ts</code>)不直接操作代理，而是通过 <code>createAgentSession()</code>(<code>packages/coding-agent/src/core/sdk.ts:166</code>)构建服务，再由 <code>createAgentSessionRuntime()</code>(<code>packages/coding-agent/src/core/agent-session-runtime.ts</code>)封装为运行时。</li>
+<li><strong>AgentSession 共享于所有模式</strong>: 交互式、print、JSON、RPC 四种模式共享同一个 <code>AgentSession</code> 实例(<code>packages/coding-agent/src/core/agent-session.ts</code>)，模式差异仅在于 I/O 层。</li>
+<li><strong>扩展驱动可定制性</strong>: 内置工具、命令、UI 组件均通过 <code>ExtensionAPI</code>(<code>packages/coding-agent/src/core/extensions/types.ts</code>)暴露，用户可以替换或扩展任意部分。</li>
+</ul>
+</section>
+
+<section id="cli-031c27d7">
+<h2 id="cli-031c27d7">CLI 入口流程</h2>
+<h3>启动路径: main.ts -&gt; parseArgs -&gt; resolveAppMode -&gt; 模式分发</h3>
+<p>CLI 的 <code>main()</code> 函数(<code>packages/coding-agent/src/main.ts:468</code>)执行以下流程:</p>
+<ol>
+<li>
+<p><strong>离线和 Windows 自更新清理</strong>(第470-478行): 处理 <code>--offline</code> / <code>PI_OFFLINE</code> 环境变量，Windows 平台清理隔离目录。</p>
+</li>
+<li>
+<p><strong>bootstrap SettingsManager</strong>(第482行): 以 <code>projectTrusted: false</code> 创建初始设置管理器，仅用于读取 <code>httpProxy</code> 等全局配置，不加载项目级资源。</p>
+</li>
+<li>
+<p><strong>包命令分发</strong>(第486行): <code>handlePackageCommand()</code> 处理 <code>pi install/remove/update/list</code> 等子命令，命中则直接退出。</p>
+</li>
+<li>
+<p><strong>config 命令分发</strong>(第499行): <code>handleConfigCommand()</code> 打开 TUI 配置界面。</p>
+</li>
+<li>
+<p><strong>参数解析</strong>(<code>packages/coding-agent/src/cli/args.ts:63</code>, 第503行): <code>parseArgs()</code> 将 <code>process.argv</code> 解析为 <code>Args</code> 结构体。未知的 <code>--flag</code> 存入 <code>unknownFlags: Map&lt;string, boolean | string&gt;</code>，供扩展注册的 CLI flag 消费。</p>
+</li>
+<li>
+<p><strong>模式解析</strong>(<code>main.ts:100-111</code> 的 <code>resolveAppMode()</code>):</p>
+</li>
+<li><code>--mode rpc</code> -&gt; rpc 模式</li>
+<li><code>--mode json</code> -&gt; json 模式</li>
+<li><code>-p</code> 或非 TTY stdin/stdout -&gt; print 模式</li>
+<li>
+<p>否则 -&gt; interactive 模式</p>
+</li>
+<li>
+<p><strong>迁移和首次设置</strong>(第549-560行): <code>runMigrations()</code> 处理认证迁移; <code>showFirstTimeSetup()</code> 在首次启动时让用户选择主题和分析同意。</p>
+</li>
+<li>
+<p><strong>SessionManager 创建</strong>(<code>main.ts:264-350</code> 的 <code>createSessionManager()</code>): 根据 CLI 参数选择会话来源--新建、<code>--session</code> 指定、<code>--continue</code> 继续、<code>--resume</code> 选择、<code>--fork</code> 分支、<code>--no-session</code> 内存模式。<code>--session</code> 和 <code>--fork</code> 支持 UUID 前缀匹配，先在当前项目查找，再全局搜索。</p>
+</li>
+<li>
+<p><strong>项目信任</strong>(第596-658行): 创建 <code>ProjectTrustStore</code>。<code>createAgentSessionRuntime</code> 的工厂函数中，<code>resourceLoaderReloadOptions.resolveProjectTrust</code> 在项目未信任时延迟解析--此时仅加载全局扩展和 CLI <code>-e</code> 扩展，项目级扩展在信任后再加载。</p>
+</li>
+<li>
+<p><strong>构建 Runtime</strong>(第736行): <code>createAgentSessionRuntime(createRuntime, { cwd, agentDir, sessionManager })</code> 执行工厂函数，创建完整的 <code>AgentSessionRuntime</code>。</p>
+</li>
+<li>
+<p><strong>模式分发</strong>(第806-853行):</p>
+<ul>
+<li><code>rpc</code> -&gt; <code>runRpcMode(runtime)</code>(<code>packages/coding-agent/src/modes/rpc/rpc-mode.ts</code>)</li>
+<li><code>interactive</code> -&gt; <code>new InteractiveMode(runtime, {...}).run()</code>(<code>packages/coding-agent/src/modes/interactive/interactive-mode.ts</code>)</li>
+<li>其他 -&gt; <code>runPrintMode(runtime, {...})</code>(<code>packages/coding-agent/src/modes/print-mode.ts</code>)</li>
+</ul>
+</li>
+</ol>
+<h3>参数类型定义</h3>
+<p><code>Args</code> 接口(<code>packages/coding-agent/src/cli/args.ts:12-55</code>)定义了所有 CLI 参数，关键字段:</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider</code></td>
+<td><code>string?</code></td>
+<td>提供商名称</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string?</code></td>
+<td>模型 pattern，支持 <code>provider/id:thinking</code> 格式</td>
+</tr>
+<tr>
+<td><code>thinking</code></td>
+<td><code>ThinkingLevel?</code></td>
+<td>思考等级: off/minimal/low/medium/high/xhigh</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>Mode?</code></td>
+<td>输出模式: text/json/rpc</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td><code>string[]?</code></td>
+<td>工具白名单</td>
+</tr>
+<tr>
+<td><code>excludeTools</code></td>
+<td><code>string[]?</code></td>
+<td>工具黑名单</td>
+</tr>
+<tr>
+<td><code>noTools</code></td>
+<td><code>boolean?</code></td>
+<td>禁用所有工具</td>
+</tr>
+<tr>
+<td><code>noBuiltinTools</code></td>
+<td><code>boolean?</code></td>
+<td>仅禁用内置工具</td>
+</tr>
+<tr>
+<td><code>extensions</code></td>
+<td><code>string[]?</code></td>
+<td>额外扩展路径(<code>-e</code>)</td>
+</tr>
+<tr>
+<td><code>session</code></td>
+<td><code>string?</code></td>
+<td>指定会话路径或 UUID</td>
+</tr>
+<tr>
+<td><code>fork</code></td>
+<td><code>string?</code></td>
+<td>分支会话路径或 UUID</td>
+</tr>
+<tr>
+<td><code>sessionId</code></td>
+<td><code>string?</code></td>
+<td>精确会话 ID</td>
+</tr>
+<tr>
+<td><code>messages</code></td>
+<td><code>string[]</code></td>
+<td>位置消息参数</td>
+</tr>
+<tr>
+<td><code>fileArgs</code></td>
+<td><code>string[]</code></td>
+<td><code>@</code> 前缀的文件参数</td>
+</tr>
+<tr>
+<td><code>unknownFlags</code></td>
+<td><code>Map&lt;string, boolean|string&gt;</code></td>
+<td>未知 flag，供扩展消费</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section id="core-cd4d7c61">
+<h2 id="core-cd4d7c61">core/ 子系统</h2>
+<p><code>packages/coding-agent/src/core/</code> 目录包含所有模式共享的核心子系统。</p>
+<h3>AgentSession</h3>
+<p>源文件: <code>packages/coding-agent/src/core/agent-session.ts</code></p>
+<p><code>AgentSession</code> 是所有运行模式共享的代理生命周期抽象(文件头部注释说明: shared between all run modes (interactive, print, rpc))。它封装:</p>
+<ul>
+<li><strong>代理状态访问</strong>: 通过 <code>agent</code> getter 暴露底层 <code>Agent</code> 实例</li>
+<li><strong>事件订阅与自动会话持久化</strong>: 订阅 <code>Agent</code> 事件并写入 <code>SessionManager</code></li>
+<li><strong>模型和思考等级管理</strong>: <code>setModel()</code>、<code>setThinkingLevel()</code>，自动 clamp 到模型支持的等级</li>
+<li><strong>Compaction</strong>: 手动(<code>compact()</code>)和自动(<code>autoCompact()</code>)上下文压缩</li>
+<li><strong>Bash 执行</strong>: 通过 <code>executeBashWithOperations()</code>(<code>packages/coding-agent/src/core/bash-executor.ts</code>)执行命令</li>
+<li><strong>会话切换和分支</strong>: 支持 <code>/tree</code> 导航、分支切换</li>
+</ul>
+<h3>AgentSessionRuntime</h3>
+<p>源文件: <code>packages/coding-agent/src/core/agent-session-runtime.ts</code></p>
+<p><code>AgentSessionRuntime</code> 是 <code>AgentSession</code> + 服务的容器，提供模式无关的运行时:</p>
+<ul>
+<li><code>session: AgentSession</code> -- 代理会话实例</li>
+<li><code>services: AgentSessionServices</code> -- 包含 <code>settingsManager</code>、<code>modelRegistry</code>、<code>authStorage</code>、<code>resourceLoader</code></li>
+<li><code>extensionsResult: LoadExtensionsResult</code> -- 扩展加载结果</li>
+<li><code>diagnostics: AgentSessionRuntimeDiagnostic[]</code> -- 启动诊断信息</li>
+<li><code>dispose()</code> -- 清理扩展和会话资源</li>
+</ul>
+<h3>sdk.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/sdk.ts</code></p>
+<p>SDK 入口，导出 <code>createAgentSession()</code> 和 <code>CreateAgentSessionOptions</code>。它是外部嵌入 Pi 的主要 API。</p>
+<p><code>CreateAgentSessionOptions</code>(第34-83行)定义了所有可配置项: cwd、agentDir、authStorage、modelRegistry、model、thinkingLevel、scopedModels、noTools、tools、excludeTools、customTools、resourceLoader、sessionManager、settingsManager。SDK 使用详情参见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md">SDK 文档</a>。</p>
+<h3>system-prompt.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/system-prompt.ts</code></p>
+<p>构建 agent 的 system prompt。组装流程: 加载内置模板 -&gt; 合并 <code>SYSTEM.md</code> -&gt; 拼接上下文文件 -&gt; 追加 skills prompt -&gt; 追加扩展片段。</p>
+<h3>model-registry.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/model-registry.ts</code></p>
+<p><code>ModelRegistry</code> 管理所有可用模型。它包装 <code>@earendil-works/pi-ai</code> 的 <code>Models</code> 集合，额外处理: 从 <code>models.json</code> 加载自定义模型、按 provider 分组查询、模糊搜索(<code>find()</code> 支持 pattern 匹配)、与 <code>AuthStorage</code> 集成自动解析 API key / OAuth token。</p>
+<h3>session-manager.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/session-manager.ts</code></p>
+<p><code>SessionManager</code> 管理会话文件的持久化。详见下方--会话管理--章节。</p>
+<h3>settings-manager.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/settings-manager.ts</code></p>
+<p><code>SettingsManager</code> 管理全局(<code>~/.pi/agent/settings.json</code>)和项目级(<code>.pi/settings.json</code>)设置。项目级设置覆盖全局设置。详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/settings.md">设置文档</a>。</p>
+<h3>resource-loader.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/resource-loader.ts</code></p>
+<p><code>ResourceLoader</code> 负责发现和加载所有可定制资源:</p>
+<ul>
+<li><strong>扩展</strong>(extensions): <code>~/.pi/agent/extensions/</code>、<code>.pi/extensions/</code>、pi packages</li>
+<li><strong>技能</strong>(skills): <code>~/.pi/agent/skills/</code>、<code>~/.agents/skills/</code>、<code>.pi/skills/</code>、<code>.agents/skills/</code>、pi packages</li>
+<li><strong>提示模板</strong>(prompt templates): <code>~/.pi/agent/prompts/</code>、<code>.pi/prompts/</code>、pi packages</li>
+<li><strong>主题</strong>(themes): <code>~/.pi/agent/themes/</code>、<code>.pi/themes/</code>、pi packages</li>
+<li><strong>上下文文件</strong>(context files): <code>AGENTS.md</code> / <code>CLAUDE.md</code>(从 cwd 向上遍历)</li>
+</ul>
+<h3>skills.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/skills.ts</code></p>
+<p>Skill 系统实现。Skill 遵循 <a href="https://agentskills.io">Agent Skills 标准</a>，是以 <code>SKILL.md</code> 文件定义的按需能力包。加载后，skill 的 prompt 内容被注入 system prompt。详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md">技能文档</a>。</p>
+<h3>prompt-templates.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/prompt-templates.ts</code></p>
+<p>提示模板系统。模板是 Markdown 文件，支持 <code>{{variable}}</code> 占位符。用户在编辑器中输入 <code>/name</code> 即可展开对应模板。</p>
+<h3>slash-commands.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/slash-commands.ts</code></p>
+<p>斜杠命令注册表。内置命令(<code>/login</code>、<code>/model</code>、<code>/settings</code>、<code>/tree</code> 等)和扩展注册的命令均通过此模块管理。</p>
+<h3>package-manager.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/package-manager.ts</code></p>
+<p>Pi 包管理器。支持从 npm、git、本地路径安装 pi package。安装位置: 全局(<code>~/.pi/agent/npm/</code>、<code>~/.pi/agent/git/</code>)或项目本地(<code>.pi/npm/</code>、<code>.pi/git/</code>)。</p>
+<h3>trust-manager.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/trust-manager.ts</code></p>
+<p>项目信任管理。<code>ProjectTrustStore</code> 读/写 <code>~/.pi/agent/trust.json</code>，存储用户对项目目录的信任决策。</p>
+<h3>event-bus.ts</h3>
+<p>源文件: <code>packages/coding-agent/src/core/event-bus.ts</code></p>
+<p><code>EventBus</code> 是扩展系统的事件中枢。它提供类型安全的事件发布/订阅机制，所有扩展生命周期事件(<code>session_start</code>、<code>message_start</code>、<code>tool_call</code>、<code>turn_end</code> 等)通过它分发。</p>
+<h3>compaction/</h3>
+<p>源文件: <code>packages/coding-agent/src/core/compaction/</code></p>
+<p>上下文压缩子系统。当会话历史接近模型上下文窗口限制时触发: <code>shouldCompact()</code> 判断是否需要压缩，<code>prepareCompaction()</code> 准备消息条目，<code>compact()</code> 调用模型生成摘要，<code>generateBranchSummary()</code> 为非活跃分支生成摘要。压缩是有损的--完整历史保留在 JSONL 文件中，可通过 <code>/tree</code> 回溯。详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md">压缩文档</a>。</p>
+</section>
+
+<section id="sec-3da9e103">
+<h2 id="sec-3da9e103">四种运行模式</h2>
+<p>Pi 支持四种运行模式，共享同一个 <code>AgentSession</code> 实例，差异仅在于 I/O 层和用户交互方式。</p>
+<h3>模式总览</h3>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>CLI 触发</th>
+<th>入口</th>
+<th>I/O 方式</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>interactive</strong></td>
+<td><code>pi</code>(默认)</td>
+<td><code>InteractiveMode</code>(<code>modes/interactive/interactive-mode.ts</code>)</td>
+<td>TUI(终端 UI)</td>
+<td>日常开发交互</td>
+</tr>
+<tr>
+<td><strong>print</strong></td>
+<td><code>pi -p</code> / 管道输入</td>
+<td><code>runPrintMode()</code>(<code>modes/print-mode.ts</code>)</td>
+<td>stdout 文本输出</td>
+<td>脚本集成、单次问答</td>
+</tr>
+<tr>
+<td><strong>json</strong></td>
+<td><code>pi --mode json</code></td>
+<td><code>runPrintMode()</code>(mode=json)</td>
+<td>stdout JSON 事件流</td>
+<td>程序化消费事件</td>
+</tr>
+<tr>
+<td><strong>rpc</strong></td>
+<td><code>pi --mode rpc</code></td>
+<td><code>runRpcMode()</code>(<code>modes/rpc/rpc-mode.ts</code>)</td>
+<td>stdin/stdout JSONL 协议</td>
+<td>进程嵌入(非 Node.js)</td>
+</tr>
+</tbody>
+</table>
+<h3>Interactive 模式</h3>
+<p>交互模式通过 <code>InteractiveMode</code> 类(<code>packages/coding-agent/src/modes/interactive/interactive-mode.ts</code>)实现。它构建在 <code>@earendil-works/pi-tui</code> 之上，提供完整的终端 UI:</p>
+<ul>
+<li><strong>启动头部</strong>: 显示快捷键提示、加载的 AGENTS.md、prompt templates、skills、extensions</li>
+<li><strong>消息区域</strong>: 渲染用户消息、assistant 响应、工具调用/结果、通知、错误、扩展 UI</li>
+<li><strong>编辑器</strong>: 用户输入区域，支持 <code>@</code> 文件引用、路径补全、多行编辑(Shift+Enter)、外部编辑器(Ctrl+G)、图片粘贴(Ctrl+V)、bash 命令(<code>!command</code> / <code>!!command</code>)</li>
+<li><strong>页脚</strong>: 显示工作目录、会话名、token/缓存用量、成本、上下文使用率、当前模型</li>
+</ul>
+<p>数据流:</p>
+<pre><code>用户输入 -&gt; Editor -&gt; InteractiveMode.prompt()
+  -&gt; AgentSession.prompt() -&gt; Agent.runAgentLoop()
+  -&gt; LLM API (通过 @earendil-works/pi-ai)
+  -&gt; 事件流 -&gt; InteractiveMode 渲染到 TUI
+  -&gt; 工具调用 -&gt; 执行 -&gt; 结果送回 Agent
+  -&gt; 最终响应 -&gt; 渲染到消息区域
+</code></pre>
+<p>扩展可替换编辑器、添加 widget、状态行、自定义页脚或覆盖层。还支持消息队列(steering/follow-up)、<code>/tree</code> 树导航、项目信任提示、中途引导。</p>
+<h3>Print 模式</h3>
+<p>Print 模式(<code>packages/coding-agent/src/modes/print-mode.ts</code>)用于单次问答和脚本集成:</p>
+<ul>
+<li><code>-p</code> / <code>--print</code>: 发送 prompt，输出最终响应文本，退出</li>
+<li><code>--mode json</code>: 发送 prompt，输出所有事件为 JSON 行(每行一个 JSON 对象)</li>
+<li>支持管道输入: <code>cat file | pi -p summarize</code> 将 stdin 内容合并到初始 prompt</li>
+<li><code>takeOverStdout()</code>(<code>packages/coding-agent/src/core/output-guard.ts</code>)接管 stdout</li>
+</ul>
+<p>数据流差异:</p>
+<ul>
+<li>不渲染 TUI，直接输出到 stdout</li>
+<li>无用户交互--不支持中途引导(steering)和跟进(follow-up)</li>
+<li>不显示项目信任提示，使用 <code>defaultProjectTrust</code> 设置</li>
+<li><code>runPrintMode()</code> 返回退出码(非零表示工具执行失败)</li>
+</ul>
+<h3>JSON 模式</h3>
+<p>JSON 模式是 Print 模式的变体(mode=json)。<code>runPrintMode()</code> 输出所有 <code>AgentSessionEvent</code> 为 JSON 行(每行一个 JSON 对象)，包括 <code>message_start</code>、<code>text_delta</code>、<code>tool_call</code>、<code>tool_result</code>、<code>message_end</code> 等事件。适合程序化消费 agent 事件流。</p>
+<h3>RPC 模式</h3>
+<p>RPC 模式(<code>packages/coding-agent/src/modes/rpc/rpc-mode.ts</code>)通过 stdin/stdout 的 LF-delimited JSONL 协议提供进程集成能力。协议定义(<code>packages/coding-agent/src/modes/rpc/rpc-types.ts</code>):</p>
+<ul>
+<li><strong>Commands</strong>: 客户端发送的 JSON 对象，包含 <code>type</code> 字段(<code>prompt</code>、<code>steer</code>、<code>follow_up</code>、<code>set_model</code> 等)和可选的 <code>id</code> 用于关联</li>
+<li><strong>Responses</strong>: 服务器返回的 JSON 对象，包含 <code>type: response</code>、<code>command</code>、<code>success</code>、<code>data</code>/<code>error</code></li>
+<li><strong>Events</strong>: <code>AgentSessionEvent</code> 对象流式发送</li>
+<li><strong>Extension UI</strong>: 扩展 UI 请求通过 <code>extension_ui_request</code> / <code>extension_ui_response</code> 交互</li>
+</ul>
+<p>RPC 模式使用严格的 LF 分隔，客户端不能使用 Node <code>readline</code>(它会按 Unicode 行分隔符拆分 JSON 内容)。详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md">RPC 文档</a>。</p>
+</section>
+
+<section id="sec-beb29273">
+<h2 id="sec-beb29273">扩展系统架构</h2>
+<h3>ExtensionAPI</h3>
+<p><code>ExtensionAPI</code>(<code>packages/coding-agent/src/core/extensions/types.ts</code>)是扩展的入口接口，提供以下能力域:</p>
+<ul>
+<li><strong>工具注册</strong>: <code>registerTool()</code> 注册 LLM 可调用的工具，<code>replaceBuiltinTool()</code> 替换内置工具</li>
+<li><strong>命令注册</strong>: <code>registerCommand()</code> 注册斜杠命令</li>
+<li><strong>快捷键注册</strong>: <code>registerShortcut()</code> 注册全局快捷键</li>
+<li><strong>事件订阅</strong>: <code>on()</code> / <code>off()</code> 订阅生命周期事件(<code>session_start</code>、<code>message_start</code>、<code>tool_call</code>、<code>turn_end</code>、<code>session_shutdown</code> 等)</li>
+<li><strong>UI 组件</strong>: <code>addWidget()</code>、<code>addFooterSection()</code>、<code>showDialog()</code>、<code>addOverlay()</code>、<code>replaceEditor()</code></li>
+<li><strong>Provider 注册</strong>: <code>registerProvider()</code> 注册自定义 LLM provider</li>
+<li><strong>System Prompt</strong>: <code>appendSystemPrompt()</code> 追加 system prompt 片段</li>
+<li><strong>CLI Flags</strong>: <code>registerFlag()</code> 注册扩展 CLI flag</li>
+<li><strong>Context</strong>: 通过 <code>ExtensionContext</code> 访问 cwd、sessionManager、modelRegistry、当前模型、isIdle、shutdown 等</li>
+</ul>
+<h3>ExtensionFactory 和 ExtensionRunner</h3>
+<p>扩展文件导出一个默认函数(可 async):</p>
+<pre><code class="language-typescript">export default function (pi: ExtensionAPI) {
+  pi.registerTool({ name: &quot;deploy&quot;, ... });
+  pi.registerCommand(&quot;stats&quot;, { ... });
+  pi.on(&quot;tool_call&quot;, async (event, ctx) =&gt; { ... });
+}
+</code></pre>
+<p><code>ExtensionRunner</code>(<code>packages/coding-agent/src/core/extensions/</code>)负责加载扩展模块、管理事件订阅、创建扩展上下文。加载顺序:</p>
+<ol>
+<li>CLI <code>-e</code> 扩展(总是加载)</li>
+<li>全局扩展(<code>~/.pi/agent/extensions/</code>)</li>
+<li>项目扩展(<code>.pi/extensions/</code>)--仅项目信任后加载</li>
+<li>Pi package 扩展--仅项目信任后加载</li>
+</ol>
+<p>详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">扩展系统文档</a>。</p>
+</section>
+
+<section id="sec-768b1459">
+<h2 id="sec-768b1459">内置工具</h2>
+<p>Pi 默认提供 7 个内置工具(通过 <code>packages/coding-agent/src/core/tools/</code>):</p>
+<table>
+<thead>
+<tr>
+<th>工具名</th>
+<th>源文件</th>
+<th>功能</th>
+<th>默认启用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>read</code></td>
+<td><code>tools/read.ts</code></td>
+<td>读取文件内容</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>write</code></td>
+<td><code>tools/write.ts</code></td>
+<td>创建/覆写文件</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>edit</code></td>
+<td><code>tools/edit.ts</code></td>
+<td>精确字符串替换编辑</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>bash</code></td>
+<td><code>tools/bash.ts</code></td>
+<td>执行 bash 命令</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>grep</code></td>
+<td><code>tools/grep.ts</code></td>
+<td>正则搜索文件内容</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>find</code></td>
+<td><code>tools/find.ts</code></td>
+<td>glob 模式查找文件</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>ls</code></td>
+<td><code>tools/ls.ts</code></td>
+<td>列出目录内容</td>
+<td>否</td>
+</tr>
+</tbody>
+</table>
+<p>工具控制 CLI 选项:</p>
+<ul>
+<li><code>--no-tools</code> / <code>-nt</code>: 禁用所有工具(内置 + 扩展)</li>
+<li><code>--no-builtin-tools</code> / <code>-nbt</code>: 仅禁用内置工具，保留扩展工具</li>
+<li><code>--tools read,grep</code> / <code>-t read,grep</code>: 白名单模式，仅启用指定工具</li>
+<li><code>--exclude-tools bash</code> / <code>-xt bash</code>: 黑名单模式，禁用指定工具</li>
+</ul>
+</section>
+
+<section id="sec-348e0702">
+<h2 id="sec-348e0702">会话管理</h2>
+<h3>JSONL 格式</h3>
+<p>会话以 JSONL 文件存储于 <code>~/.pi/agent/sessions/&lt;encoded-cwd&gt;/</code>。每行一个 JSON 对象，通过 <code>id</code> 和 <code>parentId</code> 字段形成树状分支结构(<code>packages/coding-agent/src/core/session-manager.ts</code>):</p>
+<ul>
+<li><strong>session 条目</strong>: 会话头部，包含 version、id、timestamp、cwd</li>
+<li><strong>message 条目</strong>: 用户消息或 assistant 消息，包含 <code>parentId</code> 指向前一条目</li>
+<li><strong>branch_summary 条目</strong>: 分支摘要(compaction 产物)</li>
+<li><strong>custom 条目</strong>: 扩展写入的自定义数据</li>
+</ul>
+<h3>SessionManager API</h3>
+<p><code>SessionManager</code>(<code>packages/coding-agent/src/core/session-manager.ts</code>)提供:</p>
+<ul>
+<li><code>SessionManager.create(cwd)</code> -- 新建会话</li>
+<li><code>SessionManager.open(path)</code> -- 打开已有会话</li>
+<li><code>SessionManager.continueRecent(cwd)</code> -- 继续最近会话</li>
+<li><code>SessionManager.inMemory(cwd)</code> -- 内存模式(不持久化)</li>
+<li><code>SessionManager.forkFrom(sourcePath, targetCwd)</code> -- 分支会话到新项目</li>
+<li><code>SessionManager.list(cwd)</code> -- 列出当前项目会话</li>
+<li><code>SessionManager.listAll()</code> -- 全局搜索所有会话</li>
+</ul>
+<h3>树状分支</h3>
+<p>每个会话条目有 <code>id</code> 和 <code>parentId</code>，支持原地分支:</p>
+<ul>
+<li><code>/tree</code> 命令在交互模式中浏览和跳转到任意历史点</li>
+<li><code>/fork</code> 命令从历史用户消息创建新会话文件</li>
+<li><code>/clone</code> 命令复制当前活跃分支到新会话文件</li>
+<li><code>--fork &lt;path|id&gt;</code> CLI 选项从命令行分支会话</li>
+</ul>
+<p>详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/session-format.md">会话格式文档</a>。</p>
+</section>
+
+<section id="sec-2cebeaa1">
+<h2 id="sec-2cebeaa1">安全与容器化</h2>
+<p>Pi 默认以启动用户的权限运行，不内置文件系统、进程、网络或凭证访问限制。如需更强隔离:</p>
+<ul>
+<li><strong>Gondolin 扩展</strong>: 将 <code>pi</code> 和 provider 认证保留在宿主机，将内置工具和 <code>!</code> 命令路由到本地 Linux micro-VM</li>
+<li><strong>Plain Docker</strong>: 在本地容器中运行完整 <code>pi</code> 进程</li>
+<li><strong>OpenShell</strong>: 在策略控制的沙箱中运行完整 <code>pi</code> 进程</li>
+</ul>
+<p>项目信任机制(<code>trust-manager.ts</code>)控制是否加载项目级扩展和设置。详见 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/security.md">安全文档</a> 和 <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/containerization.md">容器化文档</a>。</p>
+</section>
+
+<section id="sec-ee4989c2">
+<h2 id="sec-ee4989c2">相关文档</h2>
+<ul>
+<li><a href="pi-ai.html">pi-ai 包设计文档</a> -- 统一多提供商 LLM API 层</li>
+<li><a href="pi-agent-core.html">pi-agent-core 包设计文档</a> -- 有状态代理运行时</li>
+<li><a href="pi-tui.html">pi-tui 包设计文档</a> -- 终端 UI 框架</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">扩展系统文档</a> -- ExtensionAPI 详细参考</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md">SDK 文档</a> -- 嵌入 Pi 到 Node.js 应用</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md">RPC 文档</a> -- RPC 模式协议</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/security.md">安全文档</a> -- 安全模型与漏洞报告</li>
+<li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/containerization.md">容器化文档</a> -- 沙箱方案</li>
+</ul>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="pi-agent-core.html">← pi-agent-core</a>
+  <a class="next" href="pi-tui.html">pi-tui →</a>
+</div>
+</main>
+</body>
+</html>

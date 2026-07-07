@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 数据流 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">数据流</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a class="current" href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-93c333e7">架构分层</a></li>
+      <li><a href="#1-cli-0dacdf5d">1. 模式入口：CLI → 模式路由</a></li>
+      <li><a href="#2-tui-3b411faa">2. 交互模式（TUI）完整数据流</a></li>
+      <li><a href="#3-llm-streamassistantresponse-1abda2c8">3. LLM 调用流程：streamAssistantResponse</a></li>
+      <li><a href="#4-633e3a6c">4. 工具调用流程</a></li>
+      <li><a href="#5-steering-follow-up-9900956b">5. steering / follow-up 消息队列流程</a></li>
+      <li><a href="#6-21788548">6. 扩展生命周期与数据流交叉点</a></li>
+      <li><a href="#7-a0ccfef4">7. 关键源文件索引</a></li>
+      <li><a href="#8-60c44aad">8. 完整端到端路径总结</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>Pi 端到端数据流</h1>
+<p>本文档描述从用户输入到模型输出的完整数据流，覆盖交互模式（TUI）、print 模式和 RPC 模式的关键路径。</p>
+</section>
+
+<section id="sec-93c333e7">
+<h2 id="sec-93c333e7">架构分层</h2>
+<pre><code>┌──────────────────────────────────────────────────────────────────┐
+│                   packages/coding-agent (CLI)                    │
+│  main.ts → 模式路由 → AgentSession (会话管理/扩展系统)              │
+├──────────────────────────────────────────────────────────────────┤
+│                   packages/agent (agent-core)                    │
+│  Agent → agentLoop → streamAssistantResponse → tool calls        │
+├──────────────────────────────────────────────────────────────────┤
+│                      packages/ai (pi-ai)                         │
+│  models.stream() → Provider 认证 → API 实现 → LLM                │
+└──────────────────────────────────────────────────────────────────┘
+</code></pre>
+</section>
+
+<section id="1-cli-0dacdf5d">
+<h2 id="1-cli-0dacdf5d">1. 模式入口：CLI → 模式路由</h2>
+<p><code>packages/coding-agent/src/main.ts</code> 的 <code>main()</code> 函数根据参数和环境决定运行模式：</p>
+<pre><code>main(args)
+│
+├─ appMode === &quot;rpc&quot; ─────────────► runRpcMode(runtime)
+│                                    (stdin/stdout JSON-RPC)
+│
+├─ appMode === &quot;interactive&quot; ─────► new InteractiveMode(runtime)
+│                                    interactiveMode.run()
+│                                    (TUI 编辑器 + 事件渲染)
+│
+└─ appMode === &quot;print&quot; ───────────► runPrintMode(runtime, ...)
+                                     (一次性输出到 stdout)
+</code></pre>
+<p>模式判定逻辑（<code>resolveAppMode</code>，<code>main.ts</code> 第100行）：
+- <code>--mode rpc</code> → <code>"rpc"</code>
+- <code>--mode json</code> → <code>"json"</code>
+- <code>-p</code> / <code>--print</code> 或非 TTY stdin/stdout → <code>"print"</code>
+- 其他 → <code>"interactive"</code></p>
+</section>
+
+<section id="2-tui-3b411faa">
+<h2 id="2-tui-3b411faa">2. 交互模式（TUI）完整数据流</h2>
+<pre><code>用户在 TUI 编辑器输入 ──────────────────────────────────────────────────────────┐
+                                                                                │
+┌───────────────────────────────────────────────────────────────────────────────▼──┐
+│ InteractiveMode (packages/coding-agent/src/modes/interactive/)                   │
+│                                                                                  │
+│ 1. 用户输入文本（可能包含 @文件引用、/命令、!bash 命令）                            │
+│ 2. 输入预处理：@文件解析、/命令路由、!! / ! 区分                                    │
+│ 3. 调用 session.prompt(text, options) ──────────────────────────────────────┐     │
+└──────────────────────────────────────────────────────────────────────────────┼─────┘
+                                                                               │
+┌──────────────────────────────────────────────────────────────────────────────▼─────┐
+│ AgentSession.prompt() (packages/coding-agent/src/core/agent-session.ts)            │
+│                                                                                    │
+│ ┌─ 1. 检查 / 扩展命令（第1034行）                                                   │
+│ │   _tryExecuteExtensionCommand(text)                                              │
+│ │   如果匹配注册的命令 → 执行 handler → return（不进入 agent）                        │
+│ │                                                                                  │
+│ ├─ 2. 触发 input 扩展事件（第1046行）                                               │
+│ │   extensionRunner.emitInput(text, images, source, streamingBehavior)             │
+│ │   扩展可返回：{ action: &quot;handled&quot; } 或 { action: &quot;transform&quot; }                    │
+│ │                                                                                  │
+│ ├─ 3. 展开 /skill:name 和 /template（第1064-1068行）                                │
+│ │   _expandSkillCommand(text) → 替换为 SKILL.md 内容                               │
+│ │   expandPromptTemplate(text, promptTemplates) → 替换模板内容                      │
+│ │                                                                                  │
+│ ├─ 4. 如果正在 streaming → 排队（steering 或 followUp）                              │
+│ │   isStreaming ? queueSteer() / queueFollowUp() : 继续                             │
+│ │                                                                                  │
+│ ├─ 5. 模型 / API Key 验证（第1090-1104行）                                          │
+│ │                                                                                  │
+│ ├─ 6. 构建消息数组（第1114-1131行）                                                 │
+│ │   [userMessage, ...pendingNextTurnMessages]                                      │
+│ │                                                                                  │
+│ ├─ 7. 触发 before_agent_start 扩展事件（第1134行）                                   │
+│ │   extensionRunner.emitBeforeAgentStart(text, images, systemPrompt, options)      │
+│ │   扩展可注入 customMessage、修改 systemPrompt                                      │
+│ │                                                                                  │
+│ └─ 8. 调用 _runAgentPrompt(messages)（第1172行）──────────────────────────────┐     │
+│       agent.prompt(messages) → agentLoop                                       │     │
+└──────────────────────────────────────────────────────────────────────────────┼─────┘
+                                                                               │
+┌──────────────────────────────────────────────────────────────────────────────▼─────┐
+│ Agent.prompt() (packages/agent/src/agent.ts, 第335行)                               │
+│                                                                                    │
+│ normalizePromptInput() → runPromptMessages(messages)                                │
+│                                                                                    │
+│ runPromptMessages():                                                               │
+│   runWithLifecycle(async (signal) =&gt; {                                             │
+│     await runAgentLoop(                                                            │
+│       messages,                    // 新 prompt 消息                               │
+│       createContextSnapshot(),     // systemPrompt + messages + tools              │
+│       createLoopConfig(),          // model, convertToLlm, getSteeringMessages...  │
+│       processEvents,               // 事件处理 + listener 通知                     │
+│       signal,                                                                      │
+│       streamFn,                    // 默认 streamSimple                            │
+│     )                                                                              │
+│   })                                                                               │
+└──────────────────────────────────────────────────────────────────────┬─────────────┘
+                                                                       │
+┌──────────────────────────────────────────────────────────────────────▼──────────────┐
+│ runAgentLoop() (packages/agent/src/agent-loop.ts, 第95行)                            │
+│                                                                                     │
+│ ┌─ 1. 初始化 context（第103-107行）                                                  │
+│ │   currentContext = { ...context, messages: [...context.messages, ...prompts] }    │
+│ │                                                                                   │
+│ ├─ 2. 发射 agent_start 事件（第109行）                                               │
+│ │                                                                                   │
+│ ├─ 3. 发射 turn_start + 用户消息的 message_start/message_end（第110-114行）          │
+│ │                                                                                   │
+│ └─ 4. 进入 runLoop(currentContext, ...) ─────────────────────────────────────┐      │
+└─────────────────────────────────────────────────────────────────────────────┼───────┘
+                                                                              │
+┌─────────────────────────────────────────────────────────────────────────────▼───────┐
+│ runLoop() (agent-loop.ts, 第155行) - 核心循环                                        │
+│                                                                                     │
+│   outer loop (持续直到无 follow-up 消息):                                             │
+│   │                                                                                 │
+│   └─► inner loop (持续直到无 tool_calls 且无 steering 消息):                          │
+│       │                                                                             │
+│       ├─ 1. 发射 turn_start                                                         │
+│       │                                                                             │
+│       ├─ 2. 处理 pending 消息（steering 或 follow-up）                                │
+│       │    for (message of pendingMessages):                                        │
+│       │      emit message_start → emit message_end → push to context               │
+│       │                                                                             │
+│       ├─ 3. streamAssistantResponse(context, config, ...) ──────────────┐           │
+│       │    返回 AssistantMessage                                         │           │
+│       │                                                                  │           │
+│       ├─ 4. 提取 toolCalls，调用 executeToolCalls(...) ──────────────────┤           │
+│       │    返回 toolResult messages                                     │           │
+│       │                                                                  │           │
+│       ├─ 5. 发射 turn_end                                                 │           │
+│       │                                                                  │           │
+│       ├─ 6. prepareNextTurn() - 刷新 systemPrompt/model/thinkingLevel    │           │
+│       │                                                                  │           │
+│       ├─ 7. shouldStopAfterTurn? → agent_end 并退出                      │           │
+│       │                                                                  │           │
+│       └─ 8. 拉取 steering 消息 → 继续 inner loop 或进入 outer loop        │           │
+│                                                                                     │
+│   outer loop 底部: 检查 follow-up 消息 → 有则继续，无则 agent_end                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+</section>
+
+<section id="3-llm-streamassistantresponse-1abda2c8">
+<h2 id="3-llm-streamassistantresponse-1abda2c8">3. LLM 调用流程：streamAssistantResponse</h2>
+<pre><code>streamAssistantResponse() (agent-loop.ts, 第275行)
+│
+├─ 1. transformContext (可选)
+│   AgentMessage[] → transformContext(messages) → AgentMessage[]
+│   用于裁剪旧消息、注入外部上下文
+│   (agent.ts 第178行，agent-session.ts 中未设置，由扩展 context 事件处理)
+│
+├─ 2. convertToLlm (必须)
+│   AgentMessage[] → convertToLlm(messages) → Message[]
+│   过滤掉 UI-only 消息（custom 类型），转换为 LLM 兼容格式
+│   (agent.ts 第32-36行：defaultConvertToLlm 只保留 user/assistant/toolResult)
+│
+├─ 3. 构建 LLM Context
+│   { systemPrompt, messages: llmMessages, tools }
+│
+├─ 4. 解析 API Key
+│   config.getApiKey(provider) || config.apiKey
+│
+└─ 5. models.stream(model, context, options) ──────────────────────┐
+    streamFn (默认 streamSimple)                                     │
+                                                                     │
+┌────────────────────────────────────────────────────────────────────▼──────────────┐
+│ models.stream() (packages/ai)                                                      │
+│                                                                                    │
+│ ┌─ 1. Provider 路由：根据 model.provider 选择 API 实现                               │
+│ │   anthropic → AnthropicCompletions API                                           │
+│ │   openai → OpenAIResponses API                                                   │
+│ │   google → GoogleGenerativeLanguage API                                          │
+│ │   ... (20+ providers)                                                            │
+│ │                                                                                  │
+│ ├─ 2. 认证解析：apiKey / OAuth token / headers                                     │
+│ │                                                                                  │
+│ ├─ 3. HTTP 请求：POST → provider API endpoint                                      │
+│ │                                                                                  │
+│ └─ 4. 流式响应解析 → EventStream                                                    │
+│     start → text_delta → ... → done/error                                         │
+└────────────────────────────────────────────────────────────────────┬──────────────┘
+                                                                     │
+┌────────────────────────────────────────────────────────────────────▼──────────────┐
+│ 流式事件返回 (回到 agent-loop.ts streamAssistantResponse)                            │
+│                                                                                    │
+│ for await (const event of response):                                               │
+│   ├─ &quot;start&quot;      → emit message_start (partialMessage)                            │
+│   ├─ &quot;text_delta&quot; → emit message_update (流式文本块)                                │
+│   ├─ &quot;thinking_*&quot; → emit message_update (思考过程块)                                │
+│   ├─ &quot;toolcall_*&quot; → emit message_update (工具调用参数)                              │
+│   └─ &quot;done/error&quot; → emit message_end (完整 assistantMessage)                       │
+│                                                                                    │
+│ 返回最终 AssistantMessage（包含 content、toolCalls、usage、stopReason）              │
+└────────────────────────────────────────────────────────────────────┬──────────────┘
+                                                                     │
+                    ┌────────────────────────────────────────────────┘
+                    │
+                    ▼
+         Agent.processEvents() (agent.ts, 第527行)
+         │
+         ├─ message_start  → state.streamingMessage = message
+         ├─ message_update → state.streamingMessage = message (更新)
+         ├─ message_end    → state.messages.push(message)
+         └─ 通知所有 listeners (agent.subscribe)
+                    │
+                    ▼
+         AgentSession._handleAgentEvent() (agent-session.ts, 第515行)
+         │
+         ├─ _emitExtensionEvent(event) → 扩展 runner 转发事件
+         ├─ _emit(event) → 通知所有 AgentSessionEvent listeners
+         └─ 持久化：sessionManager.appendMessage(message)
+                    │
+                    ▼
+         TUI 渲染 (packages/tui)
+         │
+         └─ message_update 事件 → TUI 实时更新显示流式文本
+            message_end 事件 → TUI 完成消息渲染
+</code></pre>
+<h3>print/RPC 模式差异</h3>
+<pre><code>print 模式 (runPrintMode):
+  session.prompt(text) → 事件订阅 → 收集输出 → 写入 stdout → exit
+  无 TUI 渲染，事件直接转换为文本/JSON 输出
+
+RPC 模式 (runRpcMode):
+  stdin JSON-RPC → session.prompt(text) → 事件订阅 → JSON 事件序列化 → stdout
+  事件通过 JSON-RPC 通知/响应协议传输给调用方
+</code></pre>
+</section>
+
+<section id="4-633e3a6c">
+<h2 id="4-633e3a6c">4. 工具调用流程</h2>
+<pre><code>executeToolCalls() (agent-loop.ts, 第373行)
+│
+├─ 模式判定：
+│   toolExecution === &quot;sequential&quot; 或工具标记 executionMode: &quot;sequential&quot;
+│     → executeToolCallsSequential()
+│   否则 → executeToolCallsParallel() (默认)
+│
+└─ 每个 toolCall 的处理：
+
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 1. emit tool_execution_start                                │
+   │    { toolCallId, toolName, args }                           │
+   │                                                             │
+   │ 2. prepareToolCall()                                        │
+   │    ├─ 查找 tool 定义                                        │
+   │    ├─ prepareArguments() (可选兼容层)                        │
+   │    ├─ validateToolArguments() (TypeBox schema 校验)         │
+   │    └─ beforeToolCall 钩子 (可 block) ──────────────────┐    │
+   │                                                        │    │
+   │ 3. AgentSession._installAgentToolHooks() (agent-session.ts, │
+   │    第419行)                                                  │
+   │    │                                                       │
+   │    ├─ beforeToolCall → extensionRunner.emitToolCall()      │
+   │    │   触发扩展 tool_call 事件 (可 block 或修改 input)      │
+   │    │                                                       │
+   │    └─ afterToolCall → extensionRunner.emitToolResult()     │
+   │        触发扩展 tool_result 事件 (可修改 result)            │
+   │                                                             │
+   │ 4. executePreparedToolCall()                                │
+   │    └─ tool.execute(toolCallId, args, signal, onUpdate)     │
+   │       onUpdate → emit tool_execution_update (进度)          │
+   │                                                             │
+   │ 5. finalizeExecutedToolCall()                               │
+   │    └─ afterToolCall 钩子 (可修改 result/terminate)          │
+   │                                                             │
+   │ 6. emit tool_execution_end                                  │
+   │    { toolCallId, toolName, result, isError }               │
+   │                                                             │
+   │ 7. 构建 toolResultMessage                                   │
+   │    { role: &quot;toolResult&quot;, toolCallId, content, ... }         │
+   │                                                             │
+   │ 8. emit message_start + message_end (toolResultMessage)     │
+   └─────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3>并行模式下的执行顺序</h3>
+<pre><code>assistant message (toolCall A, toolCall B, toolCall C)
+│
+├─ preflight (顺序):
+│   tool_execution_start(A) → prepare(A)
+│   tool_execution_start(B) → prepare(B)
+│   tool_execution_start(C) → prepare(C)
+│
+├─ execute (并发):
+│   A.execute() ─┐
+│   B.execute() ─┤ 同时执行
+│   C.execute() ─┘
+│
+├─ tool_execution_end 按完成顺序发射:
+│   tool_execution_end(C) ← 先完成
+│   tool_execution_end(A) ← 其次
+│   tool_execution_end(B) ← 最后
+│
+└─ toolResult messages 按 assistant source 顺序发射:
+    message_start/end(toolResult A)
+    message_start/end(toolResult B)
+    message_start/end(toolResult C)
+</code></pre>
+</section>
+
+<section id="5-steering-follow-up-9900956b">
+<h2 id="5-steering-follow-up-9900956b">5. steering / follow-up 消息队列流程</h2>
+<pre><code>用户按 Enter（agent 正在 streaming/tool execution）
+│
+├─ Enter → steering 消息 ───────────────────────────────────────┐
+│   1. AgentSession._steeringMessages.push(text)                │
+│   2. agent.steer({ role: &quot;user&quot;, content, timestamp })        │
+│   3. emit queue_update 事件 → TUI 显示排队消息                 │
+│                                                               │
+│   消息在 inner loop 的步骤 8 被拉取:                            │
+│   pendingMessages = getSteeringMessages() → drain 队列         │
+│   下个 turn 开始时作为 user message 注入                        │
+│                                                               │
+├─ Alt+Enter → follow-up 消息 ──────────────────────────────────┤
+│   1. AgentSession._followUpMessages.push(text)                │
+│   2. agent.followUp({ role: &quot;user&quot;, content, timestamp })     │
+│   3. emit queue_update 事件                                    │
+│                                                               │
+│   消息在 outer loop 底部被拉取:                                 │
+│   followUpMessages = getFollowUpMessages() → drain 队列        │
+│   只有在无 tool calls 且无 steering 消息时才处理                 │
+│                                                               │
+├─ Escape → 取消排队 ────────────────────────────────────────────┤
+│   clearQueue() → 返回 steering + followUp 数组 → 恢复到编辑器   │
+│                                                               │
+└─ Alt+Up → 取回排队消息 ────────────────────────────────────────┘
+    clearQueue() → 恢复到编辑器
+
+队列模式 (QueueMode):
+│
+├─ &quot;one-at-a-time&quot; (默认): 每次 drain 只取一条消息
+│   每条消息处理后 LLM 响应，然后才取下一条
+│
+└─ &quot;all&quot;: 一次性 drain 所有消息，LLM 处理全部
+</code></pre>
+<h3>steering 与 follow-up 的区别</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>steering</th>
+<th>follow-up</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>触发时机</td>
+<td>当前 assistant turn 完成后</td>
+<td>agent 完全停止后</td>
+</tr>
+<tr>
+<td>注入位置</td>
+<td>inner loop 步骤 8 (pendingMessages)</td>
+<td>outer loop 底部</td>
+</tr>
+<tr>
+<td>是否跳过 tool calls</td>
+<td>否，先完成当前 tool calls</td>
+<td>是，无 tool calls 无 steering 时才触发</td>
+</tr>
+<tr>
+<td>TUI 快捷键</td>
+<td>Enter</td>
+<td>Alt+Enter</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section id="6-21788548">
+<h2 id="6-21788548">6. 扩展生命周期与数据流交叉点</h2>
+<p>扩展事件在数据流的以下关键点介入（参见 <code>packages/coding-agent/docs/extensions.md</code> 第276-345行）：</p>
+<pre><code>用户输入
+│
+├─ input 事件 (可 intercept/transform/handle)
+│   在 AgentSession.prompt() 步骤 2，扩展命令之后、skill/template 展开之前
+│
+├─ before_agent_start 事件 (可注入消息/修改 systemPrompt)
+│   在 AgentSession.prompt() 步骤 7，消息构建完成后、agent.prompt() 调用前
+│
+agent 循环中:
+├─ context 事件 (可修改消息列表)
+│   在 streamAssistantResponse 的 transformContext 之后、convertToLlm 之前
+│
+├─ before_provider_request 事件 (可检查/替换请求 payload)
+│   在 convertToLlm 之后、HTTP 请求之前
+│
+├─ after_provider_response 事件 (状态码 + headers)
+│   在 HTTP 响应到达后、stream 消费前
+│
+├─ tool_call 事件 (可 block 或修改参数)
+│   在 tool_execution_start 之后、validateToolArguments 之后、execute 之前
+│
+├─ tool_result 事件 (可修改结果)
+│   在 execute 之后、tool_execution_end 之前
+│
+└─ message_end 事件 (可替换消息)
+    在 assistant/toolResult message 完成后
+</code></pre>
+</section>
+
+<section id="7-a0ccfef4">
+<h2 id="7-a0ccfef4">7. 关键源文件索引</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/coding-agent/src/main.ts</code></td>
+<td>CLI 入口，参数解析，模式路由</td>
+</tr>
+<tr>
+<td><code>packages/coding-agent/src/core/agent-session.ts</code></td>
+<td>AgentSession.prompt()，扩展事件，steering/follow-up 队列</td>
+</tr>
+<tr>
+<td><code>packages/coding-agent/src/core/agent-session-services.ts</code></td>
+<td>AgentSession 创建工厂</td>
+</tr>
+<tr>
+<td><code>packages/coding-agent/src/modes/interactive/index.ts</code></td>
+<td>InteractiveMode，TUI 渲染循环</td>
+</tr>
+<tr>
+<td><code>packages/agent/src/agent.ts</code></td>
+<td>Agent 类，prompt/continue/steer/followUp，事件订阅</td>
+</tr>
+<tr>
+<td><code>packages/agent/src/agent-loop.ts</code></td>
+<td>runLoop/runAgentLoop/streamAssistantResponse/executeToolCalls</td>
+</tr>
+<tr>
+<td><code>packages/agent/src/types.ts</code></td>
+<td>AgentContext, AgentLoopConfig, AgentEvent 类型定义</td>
+</tr>
+<tr>
+<td><code>packages/ai/src/</code></td>
+<td>Provider 实现，models.stream()，API 认证</td>
+</tr>
+<tr>
+<td><code>packages/tui/src/</code></td>
+<td>终端 UI 渲染引擎</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section id="8-60c44aad">
+<h2 id="8-60c44aad">8. 完整端到端路径总结</h2>
+<pre><code>TUI 编辑器输入
+  → InteractiveMode 预处理 (@文件/!bash/命令路由)
+  → AgentSession.prompt()
+    → 扩展命令检查 → input 事件 → skill/template 展开
+    → streaming? queue : continue
+    → 模型/API Key 验证 → 构建消息 → before_agent_start 事件
+  → Agent.prompt(messages)
+    → runAgentLoop(prompts, context, config, processEvents, signal, streamFn)
+      → runLoop()
+        → inner loop:
+          → streamAssistantResponse()
+            → transformContext → convertToLlm → 构建 LLM Context
+            → models.stream(model, context, options)
+              → Provider 路由 → 认证解析 → HTTP 请求 → LLM
+              → 流式事件 (start/text_delta/toolcall_*/done)
+            → emit message_start/message_update/message_end
+            → Agent.processEvents() → AgentSession._handleAgentEvent()
+              → 扩展事件转发 → listener 通知 → 持久化 → TUI 渲染
+          → executeToolCalls()
+            → prepareToolCall → beforeToolCall 钩子/扩展 tool_call 事件
+            → tool.execute() → afterToolCall 钩子/扩展 tool_result 事件
+            → emit tool_execution_start/update/end
+            → 构建 toolResultMessage → 注入上下文
+          → turn_end → prepareNextTurn → pull steering → 继续/停止
+        → outer loop: pull follow-up → 继续/agent_end
+</code></pre>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="architecture.html">← 整体架构</a>
+  <a class="next" href="pi-ai.html">pi-ai →</a>
+</div>
+</main>
+</body>
+</html>

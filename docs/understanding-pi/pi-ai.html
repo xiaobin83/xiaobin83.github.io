@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-ai 包设计 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">pi-ai</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a class="current" href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-a4d3b02a">概述</a></li>
+      <li><a href="#sec-db40ab61">分层架构</a></li>
+      <li><a href="#sec-202aaf74">类型系统</a></li>
+      <li><a href="#api-b0effbfa">API 协议层</a></li>
+      <li><a href="#sec-80ef5dfe">认证系统</a></li>
+      <li><a href="#provider-aef682dc">Provider 工厂模式</a></li>
+      <li><a href="#sec-90c9724a">模型生成脚本</a></li>
+      <li><a href="#api-imagesmodels-d6832524">图像生成 API (ImagesModels)</a></li>
+      <li><a href="#api-compat-ts-f78535a8">旧版兼容 API (compat.ts)</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>pi-ai: LLM API 层设计文档</h1>
+<p><code>@earendil-works/pi-ai</code>（源码目录 <code>packages/ai/</code>）是 Pi 生态的统一 LLM API 层。它提供多 provider 集合管理、自动认证解析、token 和成本追踪、上下文持久化，以及跨 provider 的会话切换能力。该库仅包含支持工具调用（tool calling）的模型——这是 agentic 工作流的必要条件。</p>
+</section>
+
+<section id="sec-a4d3b02a">
+<h2 id="sec-a4d3b02a">概述</h2>
+<p><code>pi-ai</code> 的设计核心是<strong>解耦 provider 注册与模型调用</strong>。使用者构建一个 <code>Models</code> 集合，在其中注册多个 <code>Provider</code>，然后通过集合的 <code>stream()</code>/<code>complete()</code> 方法统一调用——认证解析、模型路由、跨 provider 消息转换均由库内部处理。</p>
+<p>核心设计决策：</p>
+<ul>
+<li><strong>Provider 拥有认证语义</strong>：每个 provider 声明自己的认证方式（API key、OAuth、环境变量、ambient credentials），<code>Models</code> 集合在每次请求时自动解析并合并到请求选项中（<code>packages/ai/src/auth/resolve.ts</code>）。</li>
+<li><strong>API 实现是共享的</strong>：不同 provider 可能使用相同的底层协议（如 xAI、Groq、Cerebras 共享 <code>openai-completions</code>），API 实现模块通过 <code>.lazy.ts</code> 包装器实现按需加载（<code>packages/ai/src/api/lazy.ts</code>）。</li>
+<li><strong>错误不抛异常</strong>：请求失败始终通过流事件（<code>error</code> 类型）或最终 <code>AssistantMessage.stopReason</code> 上报，不会从 <code>stream()</code>/<code>complete()</code> 中抛出（<code>packages/ai/src/types.ts:375</code>）。</li>
+</ul>
+</section>
+
+<section id="sec-db40ab61">
+<h2 id="sec-db40ab61">分层架构</h2>
+<p><code>pi-ai</code> 的调用路径为：<strong>Models 集合 -&gt; Provider -&gt; API 实现 -&gt; SDK</strong>。</p>
+<pre><code>调用方 (stream/complete)
+    |
+    v
+Models 集合 (packages/ai/src/models.ts)
+    |-- 持有 Provider 注册表 (Map&lt;string, Provider&gt;)
+    |-- 通过 CredentialStore 解析认证
+    |-- 合并认证结果到请求选项
+    |-- 委托给 Provider.stream() / Provider.complete()
+    |
+    v
+Provider (packages/ai/src/models.ts:32)
+    |-- 拥有模型目录 (getModels())
+    |-- 拥有认证方法 (auth: ProviderAuth)
+    |-- 持有 API 实现引用 (api: ProviderStreams | Record&lt;Api, ProviderStreams&gt;)
+    |-- 支持动态模型列表刷新 (refreshModels())
+    |
+    v
+API 实现 (packages/ai/src/api/&lt;api-id&gt;.ts)
+    |-- 导出 stream() 和 streamSimple()
+    |-- 将 Context 转换为 provider 原生格式
+    |-- 调用 SDK 发送请求
+    |-- 将响应解析为标准化 AssistantMessageEvent 流
+    |
+    v
+SDK (第三方 npm 包)
+    |-- @anthropic-ai/sdk
+    |-- openai
+    |-- @google/genai
+    |-- @mistralai/mistralai
+    |-- @aws-sdk/client-bedrock-runtime
+</code></pre>
+<h3>Models 集合</h3>
+<p><code>Models</code> 接口（<code>packages/ai/src/models.ts:79</code>）是调用方的唯一入口。通过 <code>createModels(options?)</code> 创建可变集合（<code>MutableModels</code>，<code>packages/ai/src/models.ts:291</code>），通过 <code>setProvider()</code> 注册 provider。</p>
+<p>集合负责：
+- 同步模型查找（<code>getModel(provider, id)</code>、<code>getModels(provider?)</code>）
+- 认证解析（<code>getAuth(model)</code>，<code>packages/ai/src/models.ts:216</code>）
+- 请求分发（<code>stream()</code> 委托给 provider，<code>packages/ai/src/models.ts:258</code>）
+- 便捷方法（<code>complete()</code> = <code>stream().result()</code>，<code>streamSimple()</code>/<code>completeSimple()</code> 使用统一 reasoning 参数）</p>
+<h3>Provider</h3>
+<p><code>Provider</code> 接口（<code>packages/ai/src/models.ts:32</code>）是具体运行时单元。每个 provider 拥有独立的 id、名称、模型列表、认证方法和 API 实现。Provider 通过 <code>createProvider()</code> 工厂函数构建（<code>packages/ai/src/models.ts:323</code>），接受 <code>api</code> 参数：可以是单个 <code>ProviderStreams</code> 实现（单 API provider），也可以是一个按 <code>model.api</code> 分发的 map（混合 API provider，如 GitHub Copilot 同时使用 Anthropic 和 OpenAI 格式）。</p>
+</section>
+
+<section id="sec-202aaf74">
+<h2 id="sec-202aaf74">类型系统</h2>
+<p>核心类型定义在 <code>packages/ai/src/types.ts</code>，包括模型描述、消息协议、工具定义和流事件协议。</p>
+<h3>Model 类型</h3>
+<pre><code class="language-typescript">// packages/ai/src/types.ts:666
+interface Model&lt;TApi extends Api&gt; {
+  id: string;
+  name: string;
+  api: TApi;
+  provider: ProviderId;
+  baseUrl: string;
+  reasoning: boolean;
+  input: (&quot;text&quot; | &quot;image&quot;)[];
+  cost: { input, output, cacheRead, cacheWrite };
+  contextWindow: number;
+  maxTokens: number;
+  compat?: ...;
+}
+</code></pre>
+<p><code>KnownApi</code>（<code>packages/ai/src/types.ts:15</code>）定义 9 种已知 API 协议，<code>Api = KnownApi | (string &amp; {})</code> 允许自定义扩展。</p>
+<h3>Context 和 Message</h3>
+<pre><code class="language-typescript">// packages/ai/src/types.ts:439
+interface Context {
+  systemPrompt?: string;
+  messages: Message[];
+  tools?: Tool[];
+}
+</code></pre>
+<p><code>Message</code>（<code>packages/ai/src/types.ts:408</code>）是 <code>UserMessage | AssistantMessage | ToolResultMessage</code> 的联合类型。每种消息都携带 <code>timestamp</code> 时间戳。</p>
+<p><code>AssistantMessage</code>（<code>packages/ai/src/types.ts:383</code>）包含 <code>content</code>（<code>TextContent | ThinkingContent | ToolCall</code> 数组）、<code>usage</code>（token 统计和成本）、<code>stopReason</code>（<code>"stop" | "length" | "toolUse" | "error" | "aborted"</code>）、<code>api</code> 和 <code>provider</code> 元信息。</p>
+<h3>Tool 定义</h3>
+<pre><code class="language-typescript">// packages/ai/src/types.ts:433
+interface Tool&lt;TParameters extends TSchema = TSchema&gt; {
+  name: string;
+  description: string;
+  parameters: TParameters;  // TypeBox schema
+}
+</code></pre>
+<p>Tool 参数使用 TypeBox schema 定义，提供类型安全的参数校验。TypeBox 的 <code>Type</code>、<code>Static</code> 和 <code>TSchema</code> 从 <code>@earendil-works/pi-ai</code> 重新导出。</p>
+<h3>流事件协议（12 种）</h3>
+<p><code>AssistantMessageEvent</code>（<code>packages/ai/src/types.ts:453</code>）定义 12 种流事件：</p>
+<table>
+<thead>
+<tr>
+<th>事件类型</th>
+<th>描述</th>
+<th>关键属性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td>流开始</td>
+<td><code>partial</code>: 初始 AssistantMessage</td>
+</tr>
+<tr>
+<td><code>text_start</code></td>
+<td>文本块开始</td>
+<td><code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>text_delta</code></td>
+<td>文本增量</td>
+<td><code>delta</code>, <code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>text_end</code></td>
+<td>文本块结束</td>
+<td><code>content</code>, <code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>thinking_start</code></td>
+<td>思考块开始</td>
+<td><code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>thinking_delta</code></td>
+<td>思考增量</td>
+<td><code>delta</code>, <code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>thinking_end</code></td>
+<td>思考块结束</td>
+<td><code>content</code>, <code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>toolcall_start</code></td>
+<td>工具调用开始</td>
+<td><code>contentIndex</code></td>
+</tr>
+<tr>
+<td><code>toolcall_delta</code></td>
+<td>工具参数流式传输</td>
+<td><code>delta</code>, <code>partial.content[contentIndex].arguments</code></td>
+</tr>
+<tr>
+<td><code>toolcall_end</code></td>
+<td>工具调用完成</td>
+<td><code>toolCall</code>: 完整 ToolCall</td>
+</tr>
+<tr>
+<td><code>done</code></td>
+<td>流正常完成</td>
+<td><code>reason</code> ("stop"/"length"/"toolUse"), <code>message</code></td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>错误/中止</td>
+<td><code>reason</code> ("error"/"aborted"), <code>error</code></td>
+</tr>
+</tbody>
+</table>
+<p>不同内容块的事件不保证连续；消费者必须使用 <code>contentIndex</code> 关联增量/结束事件与对应块。</p>
+</section>
+
+<section id="api-b0effbfa">
+<h2 id="api-b0effbfa">API 协议层</h2>
+<p><code>pi-ai</code> 实现 9 种 API 协议，源码在 <code>packages/ai/src/api/</code> 目录下（共 28 个文件）。</p>
+<h3>协议清单</h3>
+<table>
+<thead>
+<tr>
+<th>API ID</th>
+<th>实现文件</th>
+<th>选项类型</th>
+<th>使用方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>anthropic-messages</code></td>
+<td><code>api/anthropic-messages.ts</code></td>
+<td><code>AnthropicOptions</code></td>
+<td>Anthropic、GitHub Copilot</td>
+</tr>
+<tr>
+<td><code>openai-completions</code></td>
+<td><code>api/openai-completions.ts</code></td>
+<td><code>OpenAICompletionsOptions</code></td>
+<td>xAI、Groq、Cerebras、DeepSeek、OpenRouter 等</td>
+</tr>
+<tr>
+<td><code>openai-responses</code></td>
+<td><code>api/openai-responses.ts</code></td>
+<td><code>OpenAIResponsesOptions</code></td>
+<td>OpenAI</td>
+</tr>
+<tr>
+<td><code>openai-codex-responses</code></td>
+<td><code>api/openai-codex-responses.ts</code></td>
+<td><code>OpenAICodexResponsesOptions</code></td>
+<td>OpenAI Codex</td>
+</tr>
+<tr>
+<td><code>azure-openai-responses</code></td>
+<td><code>api/azure-openai-responses.ts</code></td>
+<td><code>AzureOpenAIResponsesOptions</code></td>
+<td>Azure OpenAI</td>
+</tr>
+<tr>
+<td><code>google-generative-ai</code></td>
+<td><code>api/google-generative-ai.ts</code></td>
+<td><code>GoogleOptions</code></td>
+<td>Google Gemini</td>
+</tr>
+<tr>
+<td><code>google-vertex</code></td>
+<td><code>api/google-vertex.ts</code></td>
+<td><code>GoogleVertexOptions</code></td>
+<td>Google Vertex AI</td>
+</tr>
+<tr>
+<td><code>mistral-conversations</code></td>
+<td><code>api/mistral-conversations.ts</code></td>
+<td><code>MistralOptions</code></td>
+<td>Mistral</td>
+</tr>
+<tr>
+<td><code>bedrock-converse-stream</code></td>
+<td><code>api/bedrock-converse-stream.ts</code></td>
+<td><code>BedrockOptions</code></td>
+<td>Amazon Bedrock</td>
+</tr>
+</tbody>
+</table>
+<p>每种 API 实现模块导出两个函数：<code>stream(model, context, options)</code> 和 <code>streamSimple(model, context, options)</code>。<code>stream</code> 接受该 API 的完整选项类型，<code>streamSimple</code> 使用统一 <code>reasoning</code> 参数。</p>
+<h3>.lazy.ts 延迟加载模式</h3>
+<p>每个 API 实现都有对应的 <code>.lazy.ts</code> 包装器（如 <code>api/anthropic-messages.lazy.ts</code>），核心机制在 <code>packages/ai/src/api/lazy.ts</code>：</p>
+<ul>
+<li>
+<p><strong><code>lazyStream(model, setup)</code></strong>（<code>packages/ai/src/api/lazy.ts:39</code>）：同步返回 <code>AssistantMessageEventStream</code>，异步执行 setup 函数（auth 解析、延迟模块加载）。setup 失败时流以 error 事件终止。</p>
+</li>
+<li>
+<p><strong><code>lazyApi(load)</code></strong>（<code>packages/ai/src/api/lazy.ts:63</code>）：包装动态 import 的 API 实现模块为 <code>ProviderStreams</code>。模块在首次 <code>stream()</code> 调用时才加载；主机的 import 缓存自动去重。</p>
+</li>
+</ul>
+<p>Provider 工厂导入 <code>.lazy.ts</code> 版本而非直接导入实现模块，这样 SDK（<code>@anthropic-ai/sdk</code>、<code>openai</code> 等）在 bundler 代码分割下保持在延迟 chunk 中，在首次请求时加载。</p>
+<h3>跨 Provider 消息转换</h3>
+<p><code>packages/ai/src/api/transform-messages.ts</code> 处理跨 provider 会话切换时的消息兼容性转换：</p>
+<ul>
+<li>用户消息和工具结果消息保持不变</li>
+<li>同一 provider/API 的 assistant 消息原样保留</li>
+<li>不同 provider 的 assistant 消息中的 thinking 块转换为带 <code>&lt;thinking&gt;</code> 标签的文本</li>
+<li>tool call 和普通文本保持不变</li>
+<li>不支持图片的模型接收到的图片内容替换为占位文本</li>
+</ul>
+</section>
+
+<section id="sec-80ef5dfe">
+<h2 id="sec-80ef5dfe">认证系统</h2>
+<p>认证系统源码在 <code>packages/ai/src/auth/</code> 目录（5 个文件）。</p>
+<h3>ProviderAuth 结构</h3>
+<p>每个 provider 必须声明认证（<code>packages/ai/src/auth/types.ts:179</code>）：</p>
+<pre><code class="language-typescript">interface ProviderAuth {
+  apiKey?: ApiKeyAuth;  // API key 认证
+  oauth?: OAuthAuth;    // OAuth 认证
+}
+</code></pre>
+<h3>CredentialStore</h3>
+<p><code>CredentialStore</code>（<code>packages/ai/src/auth/types.ts:47</code>）是应用持有的凭证存储抽象，按 <code>providerId</code> 键控，每个 provider 一个凭证：</p>
+<pre><code class="language-typescript">interface CredentialStore {
+  read(providerId: string): Promise&lt;Credential | undefined&gt;;
+  modify(providerId: string, fn: (current) =&gt; Promise&lt;Credential | undefined&gt;): Promise&lt;Credential | undefined&gt;;
+  delete(providerId: string): Promise&lt;void&gt;;
+}
+</code></pre>
+<p><code>modify</code> 是唯一的写路径——每次变更是序列化的 read-modify-write。OAuth token 刷新在 <code>modify</code> 内部执行，因此并发请求和进程不会重复刷新已轮换的 token（<code>packages/ai/src/auth/types.ts:54</code>）。</p>
+<p>默认实现 <code>InMemoryCredentialStore</code>（<code>packages/ai/src/auth/credential-store.ts</code>）通过 promise 链实现 per-provider 序列化。应用注入持久化存储（如 coding-agent 的 <code>AuthStorage</code>）。</p>
+<p><code>Credential</code> 类型（<code>packages/ai/src/auth/types.ts:30</code>）是 <code>ApiKeyCredential | OAuthCredential</code>：</p>
+<pre><code class="language-typescript">interface ApiKeyCredential {
+  type: &quot;api_key&quot;;
+  key?: string;
+  env?: ProviderEnv;  // provider-scoped 环境配置
+}
+</code></pre>
+<h3>envApiKeyAuth</h3>
+<p><code>envApiKeyAuth(name, envVars)</code>（<code>packages/ai/src/auth/helpers.ts:9</code>）为标准 API key provider 生成 <code>ApiKeyAuth</code>：stored credential key 优先，其次按顺序尝试环境变量。</p>
+<h3>认证解析流程</h3>
+<p><code>resolveProviderAuth()</code>（<code>packages/ai/src/auth/resolve.ts:40</code>）在每次请求时执行：</p>
+<ol>
+<li>显式 <code>apiKey</code> 选项优先</li>
+<li>检查 <code>CredentialStore</code> 中是否有存储凭证</li>
+<li>存储的 OAuth credential -&gt; 通过 <code>modify</code> 锁刷新 token -&gt; 派生 <code>ModelAuth</code></li>
+<li>存储的 API key credential -&gt; 合并 credential key 和 ambient 源</li>
+<li>无存储凭证 -&gt; 通过 provider 的 <code>ApiKeyAuth.resolve()</code> 查找环境变量</li>
+</ol>
+<h3>Ambient 认证</h3>
+<p>部分 provider 使用非环境变量的 ambient 认证：Amazon Bedrock 解析 AWS credentials（<code>AWS_PROFILE</code>、access key 对、ECS task roles），Vertex AI 解析 gcloud Application Default Credentials。</p>
+<h3>OAuth</h3>
+<p>支持 OAuth 的 provider（Anthropic、OpenAI Codex、GitHub Copilot）通过 <code>OAuthAuth</code> 接口（<code>packages/ai/src/auth/types.ts:154</code>）暴露 <code>login</code>、<code>refresh</code>、<code>toAuth</code> 操作。<code>lazyOAuth()</code>（<code>packages/ai/src/auth/helpers.ts:34</code>）包装动态 import，使 Node-only OAuth 流程代码不出现在浏览器 bundle 中。</p>
+</section>
+
+<section id="provider-aef682dc">
+<h2 id="provider-aef682dc">Provider 工厂模式</h2>
+<p>每个内置 provider 对应 <code>packages/ai/src/providers/&lt;id&gt;.ts</code> 一个工厂文件（目录共 75 个条目，包括 <code>.models.ts</code> 模型目录文件）。</p>
+<h3>工厂示例</h3>
+<p>以 Anthropic provider 为例（<code>packages/ai/src/providers/anthropic.ts</code>）：</p>
+<pre><code class="language-typescript">export function anthropicProvider(): Provider&lt;&quot;anthropic-messages&quot;&gt; {
+  return createProvider({
+    id: &quot;anthropic&quot;,
+    name: &quot;Anthropic&quot;,
+    baseUrl: &quot;https://api.anthropic.com&quot;,
+    auth: {
+      apiKey: envApiKeyAuth(&quot;Anthropic API key&quot;, [&quot;ANTHROPIC_OAUTH_TOKEN&quot;, &quot;ANTHROPIC_API_KEY&quot;]),
+      oauth: lazyOAuth({ name: &quot;Anthropic (Claude Pro/Max)&quot;, load: loadAnthropicOAuth }),
+    },
+    models: Object.values(ANTHROPIC_MODELS),
+    api: anthropicMessagesApi(),
+  });
+}
+</code></pre>
+<h3>注册所有 Provider</h3>
+<p><code>packages/ai/src/providers/all.ts</code> 提供两个入口：</p>
+<ul>
+<li><strong><code>builtinProviders()</code></strong>：返回所有内置 provider 实例的数组（36 个 provider 工厂调用）</li>
+<li><strong><code>builtinModels(options?)</code></strong>：创建 <code>Models</code> 集合并注册所有内置 provider，这是最重量级的入口点</li>
+</ul>
+<p>对于按需加载的应用，每个 provider 工厂是独立子路径 import：</p>
+<pre><code class="language-typescript">import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic';
+</code></pre>
+<h3>createProvider()</h3>
+<p><code>createProvider()</code>（<code>packages/ai/src/models.ts:323</code>）是构建 provider 的通用工厂。接受：</p>
+<ul>
+<li><code>id</code>、<code>name</code>、<code>baseUrl</code>、<code>headers</code>：基础元数据</li>
+<li><code>auth</code>：ProviderAuth（必需——每个 provider 都有认证语义）</li>
+<li><code>models</code>：初始模型列表（纯动态 provider 可为空数组）</li>
+<li><code>refreshModels</code>：动态 provider 的模型刷新函数</li>
+<li><code>api</code>：<code>ProviderStreams</code> 实例或按 <code>model.api</code> 分发的 map（混合 API provider）</li>
+</ul>
+<p>对于自定义 provider（如本地 Ollama 或 vLLM 服务），使用 <code>createProvider()</code> + <code>openAICompletionsApi()</code> + <code>envApiKeyAuth()</code> 即可。</p>
+</section>
+
+<section id="sec-90c9724a">
+<h2 id="sec-90c9724a">模型生成脚本</h2>
+<p><code>packages/ai/scripts/generate-models.ts</code>（2104 行）负责从各 provider 的数据源（如 models.dev API）抓取和解析模型信息，生成标准化的 <code>Model</code> 接口数据。</p>
+<p>生成流程：
+1. 从各 provider 源获取模型列表（models.dev API、NVIDIA NIM API、Cloudflare AI Gateway API 等）
+2. 映射 provider 特有字段到标准 <code>Model</code> 接口（pricing 格式、capability flags、model ID 转换）
+3. 输出 <code>packages/ai/src/providers/&lt;id&gt;.models.ts</code>（每个 provider 的模型目录）和聚合文件 <code>packages/ai/src/models.generated.ts</code></p>
+<p>脚本同时处理 provider 特有兼容性配置，如 Together AI 的 <code>supportsStore: false</code>、Cloudflare Workers AI 的 base URL 映射等。注意：不要直接修改 <code>models.generated.ts</code>；修改 <code>scripts/generate-models.ts</code> 后重新生成。</p>
+</section>
+
+<section id="api-imagesmodels-d6832524">
+<h2 id="api-imagesmodels-d6832524">图像生成 API (ImagesModels)</h2>
+<p>图像生成使用独立的 API 表面，镜像 chat/text 侧的设计：<code>ImagesModels</code> 集合持有 <code>ImagesProvider</code>，同步读取，认证通过 owning provider 解析。图像生成是 one-shot API：<code>generateImages()</code> 等待 provider 响应并返回最终 <code>AssistantImages</code> 结果。</p>
+<p>核心文件：
+- <code>packages/ai/src/images.ts</code>：<code>generateImages()</code> 函数，从 <code>images-api-registry.ts</code> 查找 API 实现并委托调用
+- <code>packages/ai/src/image-models.ts</code>：<code>getImageModel()</code>、<code>getImageModels()</code>、<code>getImageProviders()</code> 静态目录读取
+- <code>packages/ai/src/api/openrouter-images.ts</code>：OpenRouter 图像生成 API 实现</p>
+<p><code>ImagesModel</code> 接口（<code>packages/ai/src/types.ts:698</code>）继承 <code>Model</code> 的大部分字段，额外提供 <code>output: ("text" | "image")[]</code> 表示输出模态。<code>ImagesContext</code>（<code>packages/ai/src/types.ts:413</code>）包含 <code>input: ImagesInputContent[]</code>。目前图像生成仅通过 OpenRouter provider 提供。</p>
+</section>
+
+<section id="api-compat-ts-f78535a8">
+<h2 id="api-compat-ts-f78535a8">旧版兼容 API (compat.ts)</h2>
+<p><code>packages/ai/src/compat.ts</code> 保留旧版全局 API 表面：api-dispatch <code>stream()</code>/<code>complete()</code> + env API key 注入、api-registry、生成目录读取、per-API lazy stream 包装器、图像生成。</p>
+<pre><code class="language-typescript">// 旧用法
+import { getModel, complete } from '@earendil-works/pi-ai';
+
+// 兼容入口（行为完全相同，仅 import 路径改变）
+import { getModel, complete } from '@earendil-works/pi-ai/compat';
+</code></pre>
+<p>Compat 是根入口点的严格超集，所以文件可以整体切换 import 路径。它将在未来版本中移除；迁移到 <code>createModels()</code> + provider 工厂：</p>
+<table>
+<thead>
+<tr>
+<th>旧 API</th>
+<th>新 API</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>getModel('openai', 'gpt-4o-mini')</code></td>
+<td><code>models.getModel('openai', 'gpt-4o-mini')</code></td>
+</tr>
+<tr>
+<td><code>stream(model, ctx, opts)</code> (env-key injection)</td>
+<td><code>models.stream(model, ctx, opts)</code> (provider auth resolution)</td>
+</tr>
+<tr>
+<td><code>registerApiProvider(...)</code></td>
+<td><code>createProvider(...)</code> + <code>models.setProvider()</code></td>
+</tr>
+<tr>
+<td><code>getEnvApiKey('openai')</code></td>
+<td><code>await models.getAuth(model)</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="data-flow.html">← 数据流</a>
+  <a class="next" href="pi-agent-core.html">pi-agent-core →</a>
+</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 整体架构 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">整体架构</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a class="current" href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-308af18e">项目概述</a></li>
+      <li><a href="#monorepo-735782af">Monorepo 结构</a></li>
+      <li><a href="#sec-5a0ac9c8">包依赖关系</a></li>
+      <li><a href="#sec-e8ec7ddf">分层设计</a></li>
+      <li><a href="#sec-01a02133">技术栈</a></li>
+      <li><a href="#pi-dev-rfc-e352a2d5">与 pi.dev 和 RFC 的关系</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>Pi 整体架构</h1>
+</section>
+
+<section id="sec-308af18e">
+<h2 id="sec-308af18e">项目概述</h2>
+<p>Pi 是一个极简、可扩展的终端编程助手（coding agent harness）。它以 CLI 工具 <code>pi</code> 为核心入口，通过交互式终端界面、print 模式、JSON 模式和 RPC 模式等多种方式与用户和外部系统交互。</p>
+<p>Pi 的设计哲学是 <strong>"最小核心 + 可扩展"</strong>。核心只提供最基本的编程助手能力（读写文件、执行 bash、编辑文本），其他功能——子代理（sub-agents）、计划模式（plan mode）、权限弹窗、MCP 集成等——全部通过扩展（extensions）、技能（skills）、提示模板（prompt templates）和第三方 Pi 包（pi packages）实现。这种设计让每个用户都能按自己的工 作流定制 Pi，而不需要 fork 或修改 Pi 内部代码。</p>
+<p>项目采用 <strong>lockstep versioning</strong>：所有包共享同一个版本号，<code>patch</code> 版本用于修复和新增，<code>minor</code> 版本用于破坏性变更。</p>
+</section>
+
+<section id="monorepo-735782af">
+<h2 id="monorepo-735782af">Monorepo 结构</h2>
+<p>Pi 使用 <strong>npm workspaces</strong> 管理 monorepo，根 <code>package.json</code> 的 <code>workspaces</code> 字段定义了工作区：</p>
+<pre><code class="language-json">&quot;workspaces&quot;: [
+    &quot;packages/*&quot;,
+    &quot;packages/coding-agent/examples/extensions/with-deps&quot;,
+    &quot;packages/coding-agent/examples/extensions/custom-provider-anthropic&quot;,
+    &quot;packages/coding-agent/examples/extensions/custom-provider-gitlab-duo&quot;,
+    &quot;packages/coding-agent/examples/extensions/sandbox&quot;,
+    &quot;packages/coding-agent/examples/extensions/gondolin&quot;
+]
+</code></pre>
+<p>核心包含 <strong>5 个包</strong>，位于 <code>packages/</code> 目录下：</p>
+<table>
+<thead>
+<tr>
+<th>包名</th>
+<th>npm 包名</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tui</code></td>
+<td><code>@earendil-works/pi-tui</code></td>
+<td>终端 UI 框架，提供差分渲染和同步输出</td>
+</tr>
+<tr>
+<td><code>ai</code></td>
+<td><code>@earendil-works/pi-ai</code></td>
+<td>统一多提供商 LLM API，含模型发现和认证</td>
+</tr>
+<tr>
+<td><code>agent</code></td>
+<td><code>@earendil-works/pi-agent-core</code></td>
+<td>通用 Agent 运行时，含工具调用和状态管理</td>
+</tr>
+<tr>
+<td><code>coding-agent</code></td>
+<td><code>@earendil-works/pi-coding-agent</code></td>
+<td>交互式编程助手 CLI，用户入口</td>
+</tr>
+<tr>
+<td><code>orchestrator</code></td>
+<td><code>@earendil-works/pi-orchestrator</code></td>
+<td>实验性编排器，多 Agent 协调</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section id="sec-5a0ac9c8">
+<h2 id="sec-5a0ac9c8">包依赖关系</h2>
+<p>各包之间的 workspace 依赖关系（基于各包 <code>package.json</code> 的 <code>dependencies</code> 字段）：</p>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                      依赖关系图                              │
+│                                                             │
+│  ┌──────────┐     ┌──────────┐                              │
+│  │  pi-tui  │     │  pi-ai   │                              │
+│  │ (终端UI)  │     │ (LLM API)│                              │
+│  └────┬─────┘     └────┬─────┘                              │
+│       │                │                                    │
+│       │                ├──────────────────┐                 │
+│       │                ▼                  │                 │
+│       │          ┌──────────┐             │                 │
+│       │          │ pi-agent │             │                 │
+│       │          │ (Agent)  │             │                 │
+│       │          └────┬─────┘             │                 │
+│       │               │                   │                 │
+│       │               ▼                   │                 │
+│       │         ┌──────────────┐          │                 │
+│       └────────&gt;│ pi-coding-   │&lt;─────────┘                 │
+│                 │    agent     │                            │
+│                 │   (CLI)      │                            │
+│                 └──────┬───────┘                            │
+│                        │                                    │
+│                        ▼                                    │
+│                 ┌──────────────┐                            │
+│                 │ pi-orches-   │                            │
+│                 │   trator     │                            │
+│                 │  (编排器)     │                            │
+│                 └──────────────┘                            │
+│                                                             │
+│  ───&gt; 方向表示 &quot;depends on&quot;（依赖方向）                       │
+│  箭头从依赖方指向被依赖方                                     │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>构建顺序由根 <code>package.json</code> 的 <code>scripts.build</code> 定义，严格按照依赖拓扑排序：</p>
+<pre><code class="language-bash">&quot;build&quot;: &quot;cd packages/tui &amp;&amp; npm run build &amp;&amp; cd ../ai &amp;&amp; npm run build &amp;&amp; cd ../agent &amp;&amp; npm run build &amp;&amp; cd ../coding-agent &amp;&amp; npm run build &amp;&amp; cd ../orchestrator &amp;&amp; npm run build&quot;
+</code></pre>
+<p>构建链：<code>tui</code> → <code>ai</code> → <code>agent</code> → <code>coding-agent</code> → <code>orchestrator</code></p>
+<h3>依赖详情</h3>
+<ul>
+<li><strong>pi-tui</strong>：无 workspace 依赖。外部依赖 <code>get-east-asian-width</code>（东亚字符宽度计算）和 <code>marked</code>（Markdown 解析）。</li>
+<li><strong>pi-ai</strong>：无 workspace 依赖。外部依赖包括各提供商 SDK（<code>openai</code>、<code>@anthropic-ai/sdk</code>、<code>@google/genai</code> 等）和 <code>typebox</code>（运行时类型校验）。</li>
+<li><strong>pi-agent-core</strong>：依赖 <code>@earendil-works/pi-ai</code>（LLM 调用）和 <code>typebox</code>、<code>yaml</code>、<code>ignore</code>。</li>
+<li><strong>pi-coding-agent</strong>：依赖 <code>@earendil-works/pi-agent-core</code>、<code>@earendil-works/pi-ai</code>、<code>@earendil-works/pi-tui</code>。是所有上游包的集成点。</li>
+<li><strong>pi-orchestrator</strong>：依赖 <code>@earendil-works/pi-coding-agent</code>。实验性包，通过 coding-agent 的 SDK 编排多个 Agent 实例。</li>
+</ul>
+</section>
+
+<section id="sec-e8ec7ddf">
+<h2 id="sec-e8ec7ddf">分层设计</h2>
+<p>Pi 采用分层架构，从底层终端渲染到顶层多 Agent 编排：</p>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                     应用层                                   │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              pi-orchestrator                          │   │
+│  │              多 Agent 编排（实验性）                    │   │
+│  └──────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              pi-coding-agent                          │   │
+│  │     CLI / SDK / RPC 入口，会话管理，扩展系统             │   │
+│  └──────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────┤
+│                     框架层                                   │
+│  ┌────────────────────┐  ┌────────────────────────────┐     │
+│  │    pi-agent-core   │  │         pi-tui             │     │
+│  │  Agent 运行时       │  │   终端 UI 差分渲染          │     │
+│  │  工具调用/状态管理   │  │   组件系统/主题            │     │
+│  └────────┬───────────┘  └────────────────────────────┘     │
+│           │                                                  │
+├───────────┼──────────────────────────────────────────────────┤
+│           │           基础设施层                              │
+│  ┌────────▼───────────┐                                     │
+│  │      pi-ai         │                                     │
+│  │  统一 LLM API       │                                     │
+│  │  30+ 提供商支持      │                                     │
+│  │  流式/工具调用/思考  │                                     │
+│  └────────────────────┘                                     │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>各层职责：</p>
+<ul>
+<li>
+<p><strong>基础设施层（pi-ai）</strong>：提供统一的 LLM 调用接口，屏蔽不同提供商的 API 差异。支持流式响应、工具调用（function calling）、推理/思考（reasoning/thinking）、跨提供商上下文迁移、OAuth 认证。是整个系统的模型访问基础。</p>
+</li>
+<li>
+<p><strong>框架层（pi-agent-core + pi-tui）</strong>：<code>pi-agent-core</code> 在 <code>pi-ai</code> 之上构建 Agent 运行时，管理对话状态、工具执行循环、事件流、转向（steering）和跟进（follow-up）队列。<code>pi-tui</code> 提供差分渲染的终端 UI 组件系统，包括编辑器、选择列表、Markdown 渲染等组件。</p>
+</li>
+<li>
+<p><strong>应用层（pi-coding-agent + pi-orchestrator）</strong>：<code>pi-coding-agent</code> 集成所有下层能力，提供完整的编程助手体验——交互模式、print 模式、JSON 模式、RPC 模式、会话管理（JSONL 格式的树状分支）、扩展/技能/提示模板/主题系统、Pi 包管理。<code>pi-orchestrator</code> 在 coding-agent SDK 之上构建多 Agent 协调能力（实验性）。</p>
+</li>
+</ul>
+</section>
+
+<section id="sec-01a02133">
+<h2 id="sec-01a02133">技术栈</h2>
+<table>
+<thead>
+<tr>
+<th>技术</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TypeScript 5.9</td>
+<td>主要开发语言，全栈类型安全</td>
+</tr>
+<tr>
+<td>tsgo (<code>@typescript/native-preview</code>)</td>
+<td>构建工具，TypeScript 原生编译器</td>
+</tr>
+<tr>
+<td>Biome 2.3</td>
+<td>Lint、格式化、import 排序</td>
+</tr>
+<tr>
+<td>Vitest 4.x</td>
+<td>测试框架</td>
+</tr>
+<tr>
+<td>esbuild</td>
+<td>脚本和示例构建</td>
+</tr>
+<tr>
+<td>Husky</td>
+<td>Git hooks 管理</td>
+</tr>
+<tr>
+<td>Node.js &gt;= 22.19.0</td>
+<td>运行时</td>
+</tr>
+</tbody>
+</table>
+<p>开发流程：</p>
+<pre><code class="language-bash">npm install --ignore-scripts  # 安装依赖（跳过 lifecycle scripts）
+npm run build                 # 构建所有包
+npm run check                 # Lint + 格式化 + 类型检查
+./test.sh                     # 运行测试
+./pi-test.sh                  # 从源码运行 pi
+</code></pre>
+</section>
+
+<section id="pi-dev-rfc-e352a2d5">
+<h2 id="pi-dev-rfc-e352a2d5">与 pi.dev 和 RFC 的关系</h2>
+<ul>
+<li><strong>pi.dev</strong>：Pi 的项目网站，提供文档、演示和安装指南。安装脚本 <code>https://pi.dev/install.sh</code> 和版本检查 API <code>https://pi.dev/api/latest-version</code> 均托管于此。</li>
+<li><strong>RFC（rfc.earendil.com）</strong>：大型变更的设计讨论在 RFC 中进行，部分公开，位于 <code>https://rfc.earendil.com/keyword/pi/</code>。</li>
+<li><strong>pi-chat</strong>：Slack/聊天自动化和工作流由独立仓库 <code>earendil-works/pi-chat</code> 提供，不属于本 monorepo。</li>
+</ul>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="index.html">← 首页</a>
+  <a class="next" href="data-flow.html">数据流 →</a>
+</div>
+</main>
+</body>
+</html>

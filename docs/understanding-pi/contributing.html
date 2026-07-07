@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 贡献指南 — Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="menu-toggle" onclick="this.parentElement.classList.toggle('open')"><span></span><span></span><span></span></div>
+  <div class="logo">Pi</div>
+  <div class="version">贡献指南</div>
+
+  <div class="nav-section">
+    <div class="nav-title">导航</div>
+    <ul>
+      <li class="nav-back"><a href="index.html">← 返回首页</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">架构概览</div>
+    <ul>
+      <li><a href="index.html">首页</a></li>
+      <li><a href="architecture.html">整体架构</a></li>
+      <li><a href="data-flow.html">数据流</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">包设计</div>
+    <ul>
+      <li><a href="pi-ai.html">pi-ai</a></li>
+      <li><a href="pi-agent-core.html">pi-agent-core</a></li>
+      <li><a href="pi-coding-agent.html">pi-coding-agent</a></li>
+      <li><a href="pi-tui.html">pi-tui</a></li>
+      <li><a href="pi-orchestrator.html">pi-orchestrator</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">系统机制</div>
+    <ul>
+      <li><a href="extension-system.html">扩展系统</a></li>
+      <li><a href="session-and-compaction.html">会话与压缩</a></li>
+      <li><a href="build-and-release.html">构建与发布</a></li>
+      <li><a class="current" href="contributing.html">贡献指南</a></li>
+    </ul>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-title">本页目录</div>
+    <ul>
+      <li><a href="#sec-75ec19c7">开发环境搭建</a></li>
+      <li><a href="#sec-6bc4ecf0">项目结构</a></li>
+      <li><a href="#sec-91b5047d">代码规范</a></li>
+      <li><a href="#sec-d9bb8b77">测试策略</a></li>
+      <li><a href="#git-6c228def">Git 提交规范</a></li>
+      <li><a href="#sec-b7c0bfff">调试</a></li>
+      <li><a href="#sec-5bbae890">贡献流程概述</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section id="hero">
+<h1>开发贡献指南</h1>
+<p>本文档是 <a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> 的<strong>补充</strong>，提供 pi monorepo 的技术开发细节（环境搭建、项目结构、测试、调试等），不替代 CONTRIBUTING.md。贡献流程、issue/PR 质量门禁、<code>lgtm</code>/<code>lgtmi</code> 机制等参见 <a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>；代码风格、git 规则、发布流程等参见 <a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">AGENTS.md</a>。</p>
+<hr />
+</section>
+
+<section id="sec-75ec19c7">
+<h2 id="sec-75ec19c7">开发环境搭建</h2>
+<h3>前置要求</h3>
+<ul>
+<li>Node.js &gt;= 22.19.0</li>
+<li>npm（随 Node.js 提供）</li>
+</ul>
+<h3>克隆并安装</h3>
+<pre><code class="language-bash">git clone https://github.com/earendil-works/pi-mono
+cd pi-mono
+npm install --ignore-scripts
+npm run build
+</code></pre>
+<p><code>--ignore-scripts</code> 禁止依赖的生命周期脚本执行。pi 的正常安装和构建不需要生命周期脚本。</p>
+<h3>从源码运行</h3>
+<pre><code class="language-bash">./pi-test.sh                 # 从仓库根目录运行 pi（可从任意目录执行）
+./pi-test.sh --no-env        # 清除所有 API key 环境变量后运行
+</code></pre>
+<p><code>pi-test.sh</code> 使用 <code>tsx</code> 直接执行 TypeScript 源码，无需构建即可运行交互式 pi。</p>
+<h3>常用命令</h3>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>npm run build</code></td>
+<td>按依赖顺序构建所有包</td>
+</tr>
+<tr>
+<td><code>npm run check</code></td>
+<td>完整检查：Biome 格式化 + lint、依赖固定检查、TypeScript 类型检查、shrinkwrap 校验等</td>
+</tr>
+<tr>
+<td><code>./test.sh</code></td>
+<td>运行非 LLM 测试（清除所有 API key 环境变量后执行）</td>
+</tr>
+<tr>
+<td><code>npm test</code></td>
+<td>运行所有测试（含 LLM 依赖的测试，需要 API key）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+</section>
+
+<section id="sec-6bc4ecf0">
+<h2 id="sec-6bc4ecf0">项目结构</h2>
+<p>pi 是 npm workspaces monorepo，包含 5 个包：</p>
+<pre><code>pi-mono/
+├── packages/
+│   ├── ai/                # @earendil-works/pi-ai — 统一多 provider LLM API
+│   ├── agent/             # @earendil-works/pi-agent-core — Agent 运行时（工具调用、状态管理）
+│   ├── tui/               # @earendil-works/pi-tui — 终端 UI 库（差异渲染）
+│   ├── coding-agent/      # @earendil-works/pi-coding-agent — 交互式 CLI、RPC 模式、SDK
+│   └── orchestrator/      # @earendil-works/pi-orchestrator — 编排
+├── scripts/               # 构建、检查、发布脚本
+├── tsconfig.base.json     # 共享 TypeScript 配置基础
+├── biome.json             # Biome 格式化与 lint 配置
+├── test.sh                # 非 LLM 测试入口（清除 API key 后运行）
+├── pi-test.sh             # 从源码运行 pi
+├── AGENTS.md              # 代码规则（人和 agent 共用）
+└── CONTRIBUTING.md        # 贡献门禁与流程
+</code></pre>
+<h3>包依赖关系</h3>
+<p><code>coding-agent</code> → <code>agent</code> → <code>ai</code>，<code>coding-agent</code> → <code>tui</code>。<code>orchestrator</code> 为独立包。构建顺序已按依赖关系编排在 <code>npm run build</code> 中。</p>
+<hr />
+</section>
+
+<section id="sec-91b5047d">
+<h2 id="sec-91b5047d">代码规范</h2>
+<p>本节概述核心规则，完整规范见 <a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">AGENTS.md</a>。</p>
+<h3>TypeScript 配置</h3>
+<p><code>tsconfig.base.json</code> 开启了严格模式，关键选项：</p>
+<ul>
+<li><code>erasableSyntaxOnly: true</code> — 仅允许可擦除语法（Node strip-only 模式），禁止 <code>enum</code>、<code>namespace</code>、参数属性、<code>import =</code> 等需要 JS 编译产出的语法。使用显式字段 + 构造函数赋值替代参数属性。</li>
+<li><code>module: "Node16"</code>, <code>moduleResolution: "Node16"</code> — ESM 模块解析</li>
+<li><code>rewriteRelativeImportExtensions: true</code> — 相对路径导入自动添加 <code>.ts</code> 扩展名</li>
+</ul>
+<h3>核心规则</h3>
+<ul>
+<li><strong>禁止 <code>any</code></strong> — 除非绝对必要。使用精确类型。</li>
+<li><strong>禁止动态导入</strong> — 不使用 <code>await import()</code>、<code>import("pkg").Type</code> 等内联导入。仅允许顶层静态导入。</li>
+<li><strong>禁止硬编码按键检查</strong> — 如 <code>matchesKey(keyData, "ctrl+x")</code>。将默认值添加到 <code>DEFAULT_EDITOR_KEYBINDINGS</code> 或 <code>DEFAULT_APP_KEYBINDINGS</code> 中。</li>
+<li><strong>先读文件再改</strong> — 大范围改动前必须完整阅读相关文件，不能依赖搜索片段。</li>
+<li><strong>不要通过降级代码来修复类型错误</strong> — 应升级依赖版本。</li>
+<li><strong><code>packages/ai/src/models.generated.ts</code></strong> — 不要直接修改此文件。修改 <code>packages/ai/scripts/generate-models.ts</code> 后重新生成。</li>
+<li><strong>不要保留向后兼容</strong> — 除非用户明确要求。</li>
+</ul>
+<h3>Biome 配置</h3>
+<p>格式化：tab 缩进、宽度 3、行宽 120。Lint 使用推荐规则集，关闭了 <code>noNonNullAssertion</code>、<code>noExplicitAny</code>（Biome 级别，代码仍需避免 <code>any</code>）、<code>noControlCharactersInRegex</code>、<code>noEmptyInterface</code>。</p>
+<h3>依赖安全</h3>
+<ul>
+<li>直接外部依赖固定为精确版本，内部 workspace 包使用版本范围。</li>
+<li><code>.npmrc</code> 设置了 <code>save-exact=true</code> 和 <code>min-release-age=2</code>。</li>
+<li><code>npm install --ignore-scripts</code> / <code>npm ci --ignore-scripts</code> — 不执行生命周期脚本。</li>
+<li>Pre-commit 阻止 lockfile 提交，除非设置 <code>PI_ALLOW_LOCKFILE_CHANGE=1</code>。</li>
+<li><code>packages/coding-agent/npm-shrinkwrap.json</code> 需通过 <code>node scripts/generate-coding-agent-shrinkwrap.mjs</code> 生成。新的含生命周期脚本的依赖需审核并加入 allowlist。</li>
+</ul>
+<hr />
+</section>
+
+<section id="sec-d9bb8b77">
+<h2 id="sec-d9bb8b77">测试策略</h2>
+<h3>非 LLM 测试</h3>
+<pre><code class="language-bash">./test.sh
+</code></pre>
+<p><code>test.sh</code> 会：
+1. 备份 <code>~/.pi/agent/auth.json</code>
+2. 清除所有 LLM provider 的 API key 环境变量（Anthropic、OpenAI、Google、DeepSeek、Groq 等 30+ 个）
+3. 设置 <code>PI_NO_LOCAL_LLM=1</code> 跳过本地 LLM 测试
+4. 运行 <code>npm test</code>（执行所有 workspace 的非 LLM 测试）
+5. 退出时恢复 <code>auth.json</code></p>
+<h3>单独运行测试</h3>
+<pre><code class="language-bash"># 从仓库根目录（推荐）
+./test.sh
+
+# 从具体包目录运行特定测试
+node ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts
+</code></pre>
+<h3>Harness 测试与 faux provider</h3>
+<p><code>packages/coding-agent/test/suite/</code> 目录下的测试使用 <code>test/suite/harness.ts</code> + faux provider。faux provider 是一个模拟 LLM provider，不调用真实 API，不消耗 token。</p>
+<ul>
+<li>回归测试放在 <code>packages/coding-agent/test/suite/regressions/</code>，命名格式：<code>&lt;issue-number&gt;-&lt;short-slug&gt;.test.ts</code></li>
+<li>创建或修改测试文件后，运行测试并迭代直到通过</li>
+</ul>
+<h3>Vitest 配置</h3>
+<p>每个包有独立的 <code>vitest.config.ts</code>。不要直接运行完整 vitest suite，因为它包含 e2e 测试，这些测试在检测到 endpoint/auth 环境变量时会激活。使用 <code>./test.sh</code> 作为安全入口。</p>
+<hr />
+</section>
+
+<section id="git-6c228def">
+<h2 id="git-6c228def">Git 提交规范</h2>
+<p>本节概述核心规则，完整规范见 <a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">AGENTS.md</a> 的 Git 章节。</p>
+<h3>多 session 并发</h3>
+<p>pi monorepo 可能同时有多个 pi session 在工作，各自修改不同文件。git 操作如果触及不属于你的 unstaged/staged/untracked 文件，会破坏其他 session 的工作。</p>
+<p><strong>允许的操作：</strong></p>
+<ul>
+<li>仅提交<strong>你自己</strong>在<strong>当前 session</strong> 中修改的文件</li>
+<li>使用显式路径暂存：<code>git add &lt;path1&gt; &lt;path2&gt;</code></li>
+<li>提交前运行 <code>git status</code> 确认只暂存了自己的文件</li>
+<li><code>packages/ai/src/models.generated.ts</code> 可以和你的文件一起提交</li>
+</ul>
+<p><strong>禁止的操作：</strong></p>
+<ul>
+<li><code>git reset --hard</code>、<code>git checkout .</code>、<code>git clean -fd</code>、<code>git stash</code>（会破坏其他 agent 的工作）</li>
+<li><code>git add -A</code>、<code>git add .</code>（会暂存他人的文件）</li>
+<li><code>git commit --no-verify</code>（绕过检查）</li>
+</ul>
+<h3>提交信息格式</h3>
+<pre><code>{feat,fix,docs}[(ai,tui,agent,coding-agent)]: &lt;简短描述&gt;
+
+feat(tui): add diff rendering support
+fix(agent): handle tool call timeout
+docs: update contributing guide
+</code></pre>
+<h3>Rebase 冲突</h3>
+<ul>
+<li>仅解决你自己修改的文件中的冲突</li>
+<li>如果冲突出现在你没改过的文件中，abort 并询问用户</li>
+<li>禁止 force push</li>
+</ul>
+<h3>提交时机</h3>
+<p>除非用户明确要求，不要主动提交。</p>
+<hr />
+</section>
+
+<section id="sec-b7c0bfff">
+<h2 id="sec-b7c0bfff">调试</h2>
+<h3><code>/debug</code> 命令</h3>
+<p>在 pi 交互模式中输入 <code>/debug</code>（隐藏命令），会将以下内容写入 <code>~/.pi/agent/pi-debug.log</code>：
+- 渲染后的 TUI 行（含 ANSI 转义码）
+- 发送给 LLM 的最后几条消息</p>
+<h3>TUI 写日志</h3>
+<p>设置环境变量 <code>PI_TUI_WRITE_LOG=1</code> 可以启用 TUI 渲染日志输出，用于排查终端渲染问题。</p>
+<h3>交互模式测试（tmux）</h3>
+<p>从仓库根目录在 tmux 中运行 TUI 进行受控测试：</p>
+<pre><code class="language-bash">tmux new-session -d -s pi-test -x 80 -y 24
+tmux send-keys -t pi-test &quot;./pi-test.sh&quot; Enter
+sleep 3 &amp;&amp; tmux capture-pane -t pi-test -p     # 启动后截图
+tmux send-keys -t pi-test &quot;your prompt here&quot; Enter
+tmux send-keys -t pi-test Escape               # 特殊键（Ctrl+O 用 C-o，依此类推）
+tmux kill-session -t pi-test
+</code></pre>
+<hr />
+</section>
+
+<section id="sec-5bbae890">
+<h2 id="sec-5bbae890">贡献流程概述</h2>
+<p>本文档补充技术开发细节。贡献流程（issue/PR 门禁、<code>lgtm</code>/<code>lgtmi</code>、质量要求）详见 <a href="https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>。关键规则摘要：</p>
+<ul>
+<li>新贡献者的 issue 和 PR 默认被 auto-close，维护者每日审查并重新打开有价值的</li>
+<li><code>lgtmi</code>：未来 issue 不再被 auto-close；<code>lgtm</code>：未来 issue 和 PR 均不再被 auto-close</li>
+<li>提交 PR 前确保 <code>npm run check</code> 和 <code>./test.sh</code> 均通过</li>
+<li>不要手动编辑 <code>CHANGELOG.md</code>，由维护者添加</li>
+</ul>
+<p>完整的代码规范、发布流程、Changelog 规则等详见 <a href="https://github.com/earendil-works/pi/blob/main/AGENTS.md">AGENTS.md</a>。</p>
+</section>
+
+<div class="next-section">
+  <a class="prev" href="build-and-release.html">← 构建与发布</a>
+  
+</div>
+</main>
+</body>
+</html>
