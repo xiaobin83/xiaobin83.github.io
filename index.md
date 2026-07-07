@@ -29,3 +29,11 @@ layout: home
 - [Vikingbot 架构深度解析](docs/vikingbot-architecture.html) — 基于 OpenViking 的 OpenClaw-like AI Agent 框架详解
 - [OpenViking Agent Memory 架构深度解析](docs/agent-memory-architecture.html) — 从 YAML 配置到 LLM 提取，再到 ReAct 循环与持久化的记忆系统
 
+## Pi 文档
+
+[Pi](https://github.com/earendil-works/pi) 是一个极简终端编程助手（terminal coding harness），核心保持最小化，通过扩展、技能、提示模板和主题机制实现高度可定制。
+
+- [Pi 文档首页](docs/understanding-pi/index.html) — 项目简介、文档目录、阅读路径建议、中文术语表
+- [整体架构](docs/understanding-pi/architecture.html) — Monorepo 五包分层设计与依赖关系
+- [数据流](docs/understanding-pi/data-flow.html) — 从用户输入到模型响应的完整管线
+

@@ -254,6 +254,30 @@ pre {
 pre code { background: none; padding: 0; color: var(--text); font-size: inherit; }
 
 /* --------------------------------------------
+   Diagrams / Figures
+   -------------------------------------------- */
+figure.diagram {
+  margin: 0 0 20px 0;
+  text-align: center;
+}
+figure.diagram img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 12px;
+  box-sizing: border-box;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+figure.diagram figcaption {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* --------------------------------------------
    Cards
    -------------------------------------------- */
 .card-grid {
